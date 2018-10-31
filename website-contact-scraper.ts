@@ -1,7 +1,3 @@
-const request = require("request");
-const cheerio = require("cheerio");
-const validator = require("validator");
-
 const testURL = "https://www.contactusinc.com/";
 
 runFromStartURL(testURL);
@@ -12,7 +8,30 @@ async function runFromStartURL(startURL) {
   const secondSetOfURLs = await getLinksFromArrayOfLinks(firstSetOfURLs);
   const mergedURLs = firstSetOfURLs.concat(secondSetOfURLs);
 
-  const searchRequests = mergedURLs.map(url =>
+  const allWebsScrapeInfos = await fetchWebScrapeInfoForAllUrls(mergedURLs);
+  const filteredWebScrapeInfos = allWebsScrapeInfos.filter(
+    info =>
+      info !== undefined &&
+      (!isArrayEmpty(info.emails) || !isArrayEmpty(info.phoneNumbers))
+  );
+
+  console.log(filteredWebScrapeInfos);
+}
+
+function isArrayEmpty(array) {
+  if (array === undefined) {
+    return true;
+  }
+  if (!Array.isArray(array) || !array.length) {
+    // array does not exist, is not an array, or is empty
+    return true;
+  }
+  return false;
+}
+
+async function fetchWebScrapeInfoForAllUrls(urls): Promise<WebScrapeInfo[]> {
+  // @TODO: throw errors
+  const searchRequests = urls.map(url =>
     findEmailsAndPhonesForURL(url).catch(error => {
       if (error) {
         console.log(error, "error for: requestHTMLAndFindEmailAndPhonesForURL");
@@ -20,17 +39,24 @@ async function runFromStartURL(startURL) {
     })
   );
 
-  Promise.all(searchRequests)
-    .then(tuples => {
-      console.log(tuples);
-      return tuples;
-    })
-    .catch(function(err) {
-      console.log(err.message);
-    });
+  return Promise.all<WebScrapeInfo>(searchRequests).then(webScrapeInfos => {
+    return webScrapeInfos;
+  });
+}
+
+class WebScrapeInfo {
+  url: string;
+  emails: [string];
+  phoneNumbers: [string];
+  constructor(url: string, emails: [string], phoneNumbers: [string]) {
+    this.url = url;
+    this.emails = emails;
+    this.phoneNumbers = phoneNumbers;
+  }
 }
 
 function requestHTMLFromURL(url) {
+  const request = require("request");
   return new Promise(function(resolve, reject) {
     request(url, function(error, res, body) {
       if (!error && res.statusCode == 200) {
@@ -42,7 +68,9 @@ function requestHTMLFromURL(url) {
   });
 }
 
-async function findEmailsAndPhonesForURL(url) {
+async function seperateWebScrapeInfoIntoOccurencesObject(webScrapeInfo) {}
+
+async function findEmailsAndPhonesForURL(url): Promise<WebScrapeInfo> {
   const html = await requestHTMLFromURL(url).catch(error => {
     throw error;
   });
@@ -51,7 +79,7 @@ async function findEmailsAndPhonesForURL(url) {
 
   const phoneArrays = matchPhoneNumbersFrom(html).filter(x => x);
 
-  return { url, emailArrays, phoneArrays };
+  return new WebScrapeInfo(url, emailArrays, phoneArrays);
 }
 
 async function requestHTMLAndGetLinksForURL(url) {
@@ -77,6 +105,7 @@ async function getLinksFromArrayOfLinks(links) {
 }
 
 function getAllLinksInHTML(html) {
+  const cheerio = require("cheerio");
   var $ = cheerio.load(html);
 
   const linkHrefs = $("a")
@@ -89,6 +118,7 @@ function getAllLinksInHTML(html) {
   const deDupedLinks = uniq(linkHrefs);
 
   // get next website links to follow
+  const validator = require("validator");
   const websiteLinks = deDupedLinks.filter(url => validator.isURL(url));
   return websiteLinks;
 }
@@ -108,20 +138,3 @@ function matchPhoneNumbersFrom(string) {
 function uniq(a) {
   return Array.from(new Set(a));
 }
-
-function extractEmailsAndPhoneNumbersInHTML(html) {
-  var $ = cheerio.load(html);
-
-  //   const actorSelector = "a.UFICommentActorName";
-  //   const profiles = $(actorSelector)
-  //     .map(function() {
-  //       return $(this).attr("href");
-  //     })
-  //     .get();
-
-  //   console.log(profiles);
-}
-
-// add about to url then make request for those pages
-// can add `section=` to url as well
-// scrape profile pages
