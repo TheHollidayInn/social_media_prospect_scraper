@@ -11,17 +11,23 @@ async function runFromStartURL(startURL) {
   const firstSetOfURLs = await requestHTMLAndGetLinksForURL(startURL);
   const secondSetOfURLs = await getLinksFromArrayOfLinks(firstSetOfURLs);
   const mergedURLs = firstSetOfURLs.concat(secondSetOfURLs);
-  mergedURLs.forEach(
-    async url =>
-      await requestHTMLAndFindEmailAndPhonesForURL(url).catch(error => {
-        if (error) {
-          console.log(
-            error,
-            "error for: requestHTMLAndFindEmailAndPhonesForURL"
-          );
-        }
-      })
+
+  const searchRequests = mergedURLs.map(url =>
+    findEmailsAndPhonesForURL(url).catch(error => {
+      if (error) {
+        console.log(error, "error for: requestHTMLAndFindEmailAndPhonesForURL");
+      }
+    })
   );
+
+  Promise.all(searchRequests)
+    .then(tuples => {
+      console.log(tuples);
+      return tuples;
+    })
+    .catch(function(err) {
+      console.log(err.message);
+    });
 }
 
 function requestHTMLFromURL(url) {
@@ -36,7 +42,7 @@ function requestHTMLFromURL(url) {
   });
 }
 
-async function requestHTMLAndFindEmailAndPhonesForURL(url) {
+async function findEmailsAndPhonesForURL(url) {
   const html = await requestHTMLFromURL(url).catch(error => {
     throw error;
   });
@@ -45,8 +51,7 @@ async function requestHTMLAndFindEmailAndPhonesForURL(url) {
 
   const phoneArrays = matchPhoneNumbersFrom(html).filter(x => x);
 
-  console.log(emailArrays, "emails");
-  console.log(phoneArrays, "phones");
+  return { url, emailArrays, phoneArrays };
 }
 
 async function requestHTMLAndGetLinksForURL(url) {
