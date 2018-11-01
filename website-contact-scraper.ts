@@ -15,7 +15,22 @@ async function runFromStartURL(startURL) {
       (!isArrayEmpty(info.emails) || !isArrayEmpty(info.phoneNumbers))
   );
 
-  console.log(filteredWebScrapeInfos);
+  seperateScrapeInfosIntoURLEmailArray(filteredWebScrapeInfos);
+}
+
+function seperateScrapeInfosIntoURLEmailArray(
+  webScrapeInfos
+): InfoItemWithSource[] {
+  const filteredInfos = webScrapeInfos.filter(
+    info => !isArrayEmpty(info.emails)
+  );
+  const items = filteredInfos.map(info => {
+    const url = info.url;
+    return info.emails.map(email => {
+      return new InfoItemWithSource(url, email, 0);
+    });
+  });
+  return items;
 }
 
 function isArrayEmpty(array) {
@@ -46,12 +61,33 @@ async function fetchWebScrapeInfoForAllUrls(urls): Promise<WebScrapeInfo[]> {
 
 class WebScrapeInfo {
   url: string;
-  emails: [string];
-  phoneNumbers: [string];
-  constructor(url: string, emails: [string], phoneNumbers: [string]) {
+  emails: any[];
+  phoneNumbers: any[];
+  constructor(url: string, emails: any[], phoneNumbers: any[]) {
     this.url = url;
     this.emails = emails;
     this.phoneNumbers = phoneNumbers;
+  }
+}
+
+class InfoItemWithSource {
+  urlSource: string;
+  item: string;
+  // @TODO: make enum
+  type: number;
+
+  constructor(urlSource: string, item: string, type: number) {
+    this.urlSource = urlSource;
+    this.item = item;
+    this.type = type;
+  }
+
+  isEmail() {
+    return this.type == -0;
+  }
+
+  isPhone() {
+    return this.type === 1;
   }
 }
 
@@ -79,7 +115,7 @@ async function findEmailsAndPhonesForURL(url): Promise<WebScrapeInfo> {
 
   const phoneArrays = matchPhoneNumbersFrom(html).filter(x => x);
 
-  return new WebScrapeInfo(url, emailArrays, phoneArrays);
+  return new WebScrapeInfo(url, uniq(emailArrays), uniq(phoneArrays));
 }
 
 async function requestHTMLAndGetLinksForURL(url) {
@@ -123,18 +159,18 @@ function getAllLinksInHTML(html) {
   return websiteLinks;
 }
 
-function matchingEmailsFrom(string) {
+function matchingEmailsFrom(string): string[] {
   const emailRegex = /[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?/gi;
   const match = string.match(emailRegex);
   return match != null ? match : [];
 }
 
-function matchPhoneNumbersFrom(string) {
+function matchPhoneNumbersFrom(string): string[] {
   const phoneRegex = /[+]*[(]{0,1}[0-9]{1,4}[)]{0,1}[-\s\./0-9]*$/gi;
   const match = string.match(phoneRegex);
   return match != null ? match : [];
 }
 
-function uniq(a) {
+function uniq(a): any[] {
   return Array.from(new Set(a));
 }
