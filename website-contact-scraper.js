@@ -17,7 +17,10 @@ function runFromStartURL(startURL) {
         const allWebsScrapeInfos = yield fetchWebScrapeInfoForAllUrls(mergedURLs);
         const filteredWebScrapeInfos = allWebsScrapeInfos.filter(info => info !== undefined &&
             (!isArrayEmpty(info.emails) || !isArrayEmpty(info.phoneNumbers)));
-        seperateScrapeInfosIntoURLEmailArray(filteredWebScrapeInfos);
+        const emailItems = seperateScrapeInfosIntoURLEmailArray(filteredWebScrapeInfos);
+        const phoneItems = seperateScrapeInfosIntoURLPhoneArray(filteredWebScrapeInfos);
+        const allItems = emailItems.concat(phoneItems);
+        console.log(allItems);
     });
 }
 function seperateScrapeInfosIntoURLEmailArray(webScrapeInfos) {
@@ -28,7 +31,17 @@ function seperateScrapeInfosIntoURLEmailArray(webScrapeInfos) {
             return new InfoItemWithSource(url, email, 0);
         });
     });
-    return items;
+    return [].concat(...items);
+}
+function seperateScrapeInfosIntoURLPhoneArray(webScrapeInfos) {
+    const filteredInfos = webScrapeInfos.filter(info => !isArrayEmpty(info.phoneNumbers));
+    const items = filteredInfos.map(info => {
+        const url = info.url;
+        return info.phoneNumbers.map(phone => {
+            return new InfoItemWithSource(url, phone, 1);
+        });
+    });
+    return [].concat(...items);
 }
 function isArrayEmpty(array) {
     if (array === undefined) {
