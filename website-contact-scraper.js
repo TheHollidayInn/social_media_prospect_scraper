@@ -17,8 +17,18 @@ function runFromStartURL(startURL) {
         const allWebsScrapeInfos = yield fetchWebScrapeInfoForAllUrls(mergedURLs);
         const filteredWebScrapeInfos = allWebsScrapeInfos.filter(info => info !== undefined &&
             (!isArrayEmpty(info.emails) || !isArrayEmpty(info.phoneNumbers)));
-        console.log(filteredWebScrapeInfos);
+        seperateScrapeInfosIntoURLEmailArray(filteredWebScrapeInfos);
     });
+}
+function seperateScrapeInfosIntoURLEmailArray(webScrapeInfos) {
+    const filteredInfos = webScrapeInfos.filter(info => !isArrayEmpty(info.emails));
+    const items = filteredInfos.map(info => {
+        const url = info.url;
+        return info.emails.map(email => {
+            return new InfoItemWithSource(url, email, 0);
+        });
+    });
+    return items;
 }
 function isArrayEmpty(array) {
     if (array === undefined) {
@@ -50,6 +60,19 @@ class WebScrapeInfo {
         this.phoneNumbers = phoneNumbers;
     }
 }
+class InfoItemWithSource {
+    constructor(urlSource, item, type) {
+        this.urlSource = urlSource;
+        this.item = item;
+        this.type = type;
+    }
+    isEmail() {
+        return this.type == -0;
+    }
+    isPhone() {
+        return this.type === 1;
+    }
+}
 function requestHTMLFromURL(url) {
     const request = require("request");
     return new Promise(function (resolve, reject) {
@@ -74,7 +97,7 @@ function findEmailsAndPhonesForURL(url) {
         // search for phone or email in html
         const emailArrays = matchingEmailsFrom(html).filter(x => x);
         const phoneArrays = matchPhoneNumbersFrom(html).filter(x => x);
-        return new WebScrapeInfo(url, emailArrays, phoneArrays);
+        return new WebScrapeInfo(url, uniq(emailArrays), uniq(phoneArrays));
     });
 }
 function requestHTMLAndGetLinksForURL(url) {
