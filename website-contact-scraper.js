@@ -13,51 +13,54 @@ const testURL = "https://www.contactusinc.com/";
 runFromStartURL(testURL);
 function runFromStartURL(startURL) {
     return __awaiter(this, void 0, void 0, function* () {
-        // // Fetch links for two levels deep
-        // const firstSetOfURLs = await requestHTMLAndGetLinksForURL(startURL);
-        // const secondSetOfURLs = await getLinksFromArrayOfLinks(firstSetOfURLs);
-        // const mergedURLs = firstSetOfURLs.concat(secondSetOfURLs);
-        // // Get web scrape infos which are url with [emails] and [phones]
-        // const allWebsScrapeInfos = await fetchWebScrapeInfoForAllUrls(mergedURLs);
-        // // Filter out completely empty web infos
-        // const filteredWebScrapeInfos = allWebsScrapeInfos.filter(
-        //   info =>
-        //     info !== undefined &&
-        //     (!isArrayEmpty(info.emails) || !isArrayEmpty(info.phoneNumbers))
+        // Fetch links for two levels deep
+        const firstSetOfURLs = yield requestHTMLAndGetLinksForURL(startURL);
+        const secondSetOfURLs = yield getLinksFromArrayOfLinks(firstSetOfURLs);
+        const mergedURLs = firstSetOfURLs.concat(secondSetOfURLs);
+        // Get web scrape infos which are url with [emails] and [phones]
+        const allWebsScrapeInfos = yield fetchWebScrapeInfoForAllUrls(mergedURLs);
+        // Filter out completely empty web infos
+        const filteredWebScrapeInfos = allWebsScrapeInfos.filter(info => info !== undefined &&
+            (!isArrayEmpty(info.emails) || !isArrayEmpty(info.phoneNumbers)));
+        // seperate all infos into individual items of url and single email or single phone
+        const emailItems = seperateScrapeInfosIntoURLEmailArray(filteredWebScrapeInfos);
+        const phoneItems = seperateScrapeInfosIntoURLPhoneArray(filteredWebScrapeInfos);
+        const allItems = emailItems.concat(phoneItems);
+        // const one = new InfoItemWithSource(
+        //     "https://www.contactusinc.com/contactus-communications-appoints-chief-business-development-officer/",
+        //     "hr@contactusinc.com",
+        //     0
         // );
-        // // seperate all infos into individual items of url and single email or single phone
-        // const emailItems = seperateScrapeInfosIntoURLEmailArray(
-        //   filteredWebScrapeInfos
+        // const two = new InfoItemWithSource(
+        //     "https://www.contactusinc.com/contactus-communications-appoints-chief-business-officer/",
+        //     "hr@contactusinc.com",
+        //     0
         // );
-        // const phoneItems = seperateScrapeInfosIntoURLPhoneArray(
-        //   filteredWebScrapeInfos
-        // );
-        // const allItems = emailItems.concat(phoneItems);
-        // console.log(allItems);
-        const one = new InfoItemWithSource_js_1.InfoItemWithSource("https://www.contactusinc.com/contactus-communications-appoints-chief-business-development-officer/", "hr@contactusinc.com", 0);
-        const two = new InfoItemWithSource_js_1.InfoItemWithSource("https://www.contactusinc.com/contactus-communications-appoints-chief-business-officer/", "hr@contactusinc.com", 0);
-        const allItems = [one, two];
+        // const allItems = [one, two];
         // merge emails/merge phones between items to get email and [urls] or phone and [urls]
-        const these = allItems.map(object => {
-            // ItemWithSources();
-            return {
-                count: countOfObjectInArray(object, allItems),
-                url: object.urlSource,
-                item: object.item
-            };
+        const itemsWithSources = allItems.map(object => {
+            // @TODO: reduce duplication of mappings
+            const itemToFind = object.item;
+            const allMatchingItemsWithSource = getAllObjectsWithMatchingItem(allItems, itemToFind);
+            const sources = allMatchingItemsWithSource.map(x => x.urlSource);
+            return new InfoItemWithSource_js_1.ItemWithSources(itemToFind, sources, object.type);
         });
-        allItems.map(object => {
-            allItems.map(item => { });
+        // remove duplicates
+        const uniqueItemsWithSources = removeDuplicates(itemsWithSources, "item");
+        console.log(uniqueItemsWithSources);
+        // Do some verification or more strict filtering on items here
+        const validItems = uniqueItemsWithSources.filter(info => {
+            const item = info.item;
+            return (strictEmailRegexCheck(item) &&
+                !isStringProbablyAnImagePath(item) &&
+                !endExtensionIsOnlyNumbers(item));
         });
-        console.log(getShortMessages(allItems, "hr@contactusinc.com"));
+        console.log(validItems);
         // done here
     });
 }
-function countOfObjectInArray(object, array) {
-    return array.filter(x => object === x).length;
-}
-function getShortMessages(messages, itemToFind) {
-    return messages.filter(function (obj) {
+function getAllObjectsWithMatchingItem(objects, itemToFind) {
+    return objects.filter(function (obj) {
         return obj.item === itemToFind;
     });
 }
@@ -109,12 +112,6 @@ class WebScrapeInfo {
         this.url = url;
         this.emails = emails;
         this.phoneNumbers = phoneNumbers;
-    }
-}
-class ItemWithSources {
-    constructor(item, sources) {
-        this.item = item;
-        this.sources = sources;
     }
 }
 function requestHTMLFromURL(url) {
@@ -184,6 +181,44 @@ function matchPhoneNumbersFrom(string) {
     const match = string.match(phoneRegex);
     return match != null ? match : [];
 }
+function strictEmailRegexCheck(string) {
+    const strictEmailRegex = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+    return strictEmailRegex.test(string);
+}
 function uniq(a) {
     return Array.from(new Set(a));
+}
+function removeDuplicates(myArr, prop) {
+    return myArr.filter((obj, pos, arr) => {
+        return arr.map(mapObj => mapObj[prop]).indexOf(obj[prop]) === pos;
+    });
+}
+function isStringProbablyAnImagePath(string) {
+    const imageExtensions = [
+        ".tif",
+        ".tiff",
+        ".bmp",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".png",
+        ".eps",
+        ".raw ",
+        ".cr2 ",
+        ".nef ",
+        ".orf ",
+        ".sr2"
+    ];
+    let result = false;
+    imageExtensions.forEach(extension => {
+        const endsWith = string.endsWith(extension);
+        if (endsWith === true) {
+            result = true;
+        }
+    });
+    return result;
+}
+function endExtensionIsOnlyNumbers(string) {
+    const extension = string.split(".").pop();
+    return /^\d+$/.test(extension);
 }

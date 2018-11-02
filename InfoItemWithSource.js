@@ -14,3 +14,11 @@ class InfoItemWithSource {
     }
 }
 exports.InfoItemWithSource = InfoItemWithSource;
+class ItemWithSources {
+    constructor(item, sources, type) {
+        this.item = item;
+        this.sources = sources;
+        this.type = type;
+    }
+}
+exports.ItemWithSources = ItemWithSources;
