@@ -9,7 +9,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const InfoItemWithSource_js_1 = require("./InfoItemWithSource.js");
-const testURL = "https://www.contactusinc.com/";
+// const testURL = "https://www.contactusinc.com/";
+const testURL = "https://www.bonjoro.com/";
 // @TODO: turn into export function
 runFromStartURL(testURL);
 function runFromStartURL(startURL) {
@@ -18,11 +19,16 @@ function runFromStartURL(startURL) {
         // Fetch links for two levels deep
         const firstSetOfURLs = yield requestHTMLAndGetLinksForURL(startURL);
         const secondSetOfURLs = yield getLinksFromArrayOfLinks(firstSetOfURLs);
-        const mergedURLs = firstSetOfURLs.concat(secondSetOfURLs).filter(x => x);
+        const mergedURLs = firstSetOfURLs.concat(secondSetOfURLs);
+        // filter urls that do not match the startUrl's domain
+        const rootURL = extractRootDomain(startURL);
+        const finalURLs = mergedURLs
+            .filter(x => x)
+            .filter(url => extractRootDomain(url) === rootURL);
         console.log("–––––––– Finished getting links");
         console.log("–––––––– Started scraping urls");
         // Get web scrape infos which are url with [emails] and [phones]
-        const allWebsScrapeInfos = yield fetchWebScrapeInfoForAllUrls(mergedURLs);
+        const allWebsScrapeInfos = yield fetchWebScrapeInfoForAllUrls(finalURLs);
         console.log("–––––––– Finished scraping urls");
         const items = webScrapeInfosToItemsWithSources(allWebsScrapeInfos);
         return items;
@@ -124,7 +130,6 @@ function requestHTMLFromURL(url) {
     return new Promise(function (resolve, reject) {
         request(url, function (error, res, body) {
             if (!error && res.statusCode == 200) {
-                console.log(body === undefined);
                 if (body === undefined) {
                     reject(new Error("No html returned from page"));
                     return;
@@ -230,6 +235,35 @@ function isStringProbablyAnImagePath(string) {
     return result;
 }
 function endExtensionIsOnlyNumbers(string) {
-    const extension = string.split(".").pop();
+    const extension = string.substring(string.lastIndexOf(".") + 1);
     return /^\d+$/.test(extension);
+}
+function extractHostname(url) {
+    var hostname;
+    //find & remove protocol (http, ftp, etc.) and get hostname
+    if (url.indexOf("//") > -1) {
+        hostname = url.split("/")[2];
+    }
+    else {
+        hostname = url.split("/")[0];
+    }
+    //find & remove port number
+    hostname = hostname.split(":")[0];
+    //find & remove "?"
+    hostname = hostname.split("?")[0];
+    return hostname;
+}
+function extractRootDomain(url) {
+    var domain = extractHostname(url), splitArr = domain.split("."), arrLen = splitArr.length;
+    //extracting the root domain here
+    //if there is a subdomain
+    if (arrLen > 2) {
+        domain = splitArr[arrLen - 2] + "." + splitArr[arrLen - 1];
+        //check to see if it's using a Country Code Top Level Domain (ccTLD) (i.e. ".me.uk")
+        if (splitArr[arrLen - 2].length == 2 && splitArr[arrLen - 1].length == 2) {
+            //this is using a ccTLD
+            domain = splitArr[arrLen - 3] + "." + domain;
+        }
+    }
+    return domain;
 }
