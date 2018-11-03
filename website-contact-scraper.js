@@ -10,54 +10,50 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 const InfoItemWithSource_js_1 = require("./InfoItemWithSource.js");
 const testURL = "https://www.contactusinc.com/";
+// @TODO: turn into export function
 runFromStartURL(testURL);
 function runFromStartURL(startURL) {
     return __awaiter(this, void 0, void 0, function* () {
+        console.log("–––––––– Started Getting Links");
         // Fetch links for two levels deep
         const firstSetOfURLs = yield requestHTMLAndGetLinksForURL(startURL);
         const secondSetOfURLs = yield getLinksFromArrayOfLinks(firstSetOfURLs);
-        const mergedURLs = firstSetOfURLs.concat(secondSetOfURLs);
+        const mergedURLs = firstSetOfURLs.concat(secondSetOfURLs).filter(x => x);
+        console.log("–––––––– Finished getting links");
+        console.log("–––––––– Started scraping urls");
         // Get web scrape infos which are url with [emails] and [phones]
         const allWebsScrapeInfos = yield fetchWebScrapeInfoForAllUrls(mergedURLs);
-        // Filter out completely empty web infos
-        const filteredWebScrapeInfos = allWebsScrapeInfos.filter(info => info !== undefined &&
-            (!isArrayEmpty(info.emails) || !isArrayEmpty(info.phoneNumbers)));
-        // seperate all infos into individual items of url and single email or single phone
-        const emailItems = seperateScrapeInfosIntoURLEmailArray(filteredWebScrapeInfos);
-        const phoneItems = seperateScrapeInfosIntoURLPhoneArray(filteredWebScrapeInfos);
-        const allItems = emailItems.concat(phoneItems);
-        // const one = new InfoItemWithSource(
-        //     "https://www.contactusinc.com/contactus-communications-appoints-chief-business-development-officer/",
-        //     "hr@contactusinc.com",
-        //     0
-        // );
-        // const two = new InfoItemWithSource(
-        //     "https://www.contactusinc.com/contactus-communications-appoints-chief-business-officer/",
-        //     "hr@contactusinc.com",
-        //     0
-        // );
-        // const allItems = [one, two];
-        // merge emails/merge phones between items to get email and [urls] or phone and [urls]
-        const itemsWithSources = allItems.map(object => {
-            // @TODO: reduce duplication of mappings
-            const itemToFind = object.item;
-            const allMatchingItemsWithSource = getAllObjectsWithMatchingItem(allItems, itemToFind);
-            const sources = allMatchingItemsWithSource.map(x => x.urlSource);
-            return new InfoItemWithSource_js_1.ItemWithSources(itemToFind, sources, object.type);
-        });
-        // remove duplicates
-        const uniqueItemsWithSources = removeDuplicates(itemsWithSources, "item");
-        console.log(uniqueItemsWithSources);
-        // Do some verification or more strict filtering on items here
-        const validItems = uniqueItemsWithSources.filter(info => {
-            const item = info.item;
-            return (strictEmailRegexCheck(item) &&
-                !isStringProbablyAnImagePath(item) &&
-                !endExtensionIsOnlyNumbers(item));
-        });
-        console.log(validItems);
-        // done here
+        console.log("–––––––– Finished scraping urls");
+        const items = webScrapeInfosToItemsWithSources(allWebsScrapeInfos);
+        return items;
     });
+}
+function webScrapeInfosToItemsWithSources(webScrapeInfos) {
+    // Filter out completely empty web infos
+    const filteredWebScrapeInfos = webScrapeInfos.filter(info => info !== undefined &&
+        (!isArrayEmpty(info.emails) || !isArrayEmpty(info.phoneNumbers)));
+    // seperate all infos into individual items of url and single email or single phone
+    const emailItems = seperateScrapeInfosIntoURLEmailArray(filteredWebScrapeInfos);
+    const phoneItems = seperateScrapeInfosIntoURLPhoneArray(filteredWebScrapeInfos);
+    const allItems = emailItems.concat(phoneItems);
+    // merge emails/merge phones between items to get email and [urls] or phone and [urls]
+    const itemsWithSources = allItems.map(object => {
+        // @TODO: reduce duplication of mappings
+        const itemToFind = object.item;
+        const allMatchingItemsWithSource = getAllObjectsWithMatchingItem(allItems, itemToFind);
+        const sources = allMatchingItemsWithSource.map(x => x.urlSource);
+        return new InfoItemWithSource_js_1.ItemWithSources(itemToFind, sources, object.type);
+    });
+    // remove duplicates
+    const uniqueItemsWithSources = removeDuplicates(itemsWithSources, "item");
+    // Do some verification or more strict filtering on items here
+    const validItems = uniqueItemsWithSources.filter(info => {
+        const item = info.item;
+        return (strictEmailRegexCheck(item) &&
+            !isStringProbablyAnImagePath(item) &&
+            !endExtensionIsOnlyNumbers(item));
+    });
+    return validItems;
 }
 function getAllObjectsWithMatchingItem(objects, itemToFind) {
     return objects.filter(function (obj) {
@@ -96,14 +92,17 @@ function isArrayEmpty(array) {
 }
 function fetchWebScrapeInfoForAllUrls(urls) {
     return __awaiter(this, void 0, void 0, function* () {
-        // @TODO: throw errors
-        const searchRequests = urls.map(url => findEmailsAndPhonesForURL(url).catch(error => {
-            if (error) {
-                console.log(error, "error for: requestHTMLAndFindEmailAndPhonesForURL");
-            }
-        }));
-        return Promise.all(searchRequests).then(webScrapeInfos => {
-            return webScrapeInfos;
+        const htmlRequests = urls.map(url => {
+            return requestHTMLFromURL(url).catch(error => {
+                if (error) {
+                    console.log(error, "fetchWebScrapeInfoForAllUrls.requestHTMLFromURL error");
+                }
+            });
+        });
+        return Promise.all(htmlRequests).then(requestResponses => {
+            return requestResponses
+                .filter(x => x)
+                .map(response => findEmailsAndPhonesForRequestResponse(response));
         });
     });
 }
@@ -114,12 +113,24 @@ class WebScrapeInfo {
         this.phoneNumbers = phoneNumbers;
     }
 }
+class WebsiteHTMLResponse {
+    constructor(url, html) {
+        this.url = url;
+        this.html = html;
+    }
+}
 function requestHTMLFromURL(url) {
     const request = require("request");
     return new Promise(function (resolve, reject) {
         request(url, function (error, res, body) {
             if (!error && res.statusCode == 200) {
-                resolve(body);
+                console.log(body === undefined);
+                if (body === undefined) {
+                    reject(new Error("No html returned from page"));
+                    return;
+                }
+                const response = new WebsiteHTMLResponse(url, body);
+                resolve(response);
             }
             else {
                 reject(error);
@@ -127,27 +138,27 @@ function requestHTMLFromURL(url) {
         });
     });
 }
-function findEmailsAndPhonesForURL(url) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const html = yield requestHTMLFromURL(url).catch(error => {
-            throw error;
-        });
-        // search for phone or email in html
-        const emailArrays = matchingEmailsFrom(html).filter(x => x);
-        const phoneArrays = matchPhoneNumbersFrom(html).filter(x => x);
-        return new WebScrapeInfo(url, uniq(emailArrays), uniq(phoneArrays));
-    });
+function findEmailsAndPhonesForRequestResponse(requestResponse) {
+    const html = requestResponse.html;
+    // search for phone or email in html
+    const emailArrays = matchingEmailsFrom(html).filter(x => x);
+    const phoneArrays = matchPhoneNumbersFrom(html).filter(x => x);
+    return new WebScrapeInfo(requestResponse.url, uniq(emailArrays), uniq(phoneArrays));
 }
 function requestHTMLAndGetLinksForURL(url) {
     return __awaiter(this, void 0, void 0, function* () {
-        const html = yield requestHTMLFromURL(url);
-        const links = yield getAllLinksInHTML(html);
+        const response = yield requestHTMLFromURL(url);
+        const links = yield getAllLinksInHTML(response.html);
         return links;
     });
 }
 function getLinksFromArrayOfLinks(links) {
     return __awaiter(this, void 0, void 0, function* () {
-        const linkRequestPromises = links.map(link => requestHTMLAndGetLinksForURL(link));
+        const linkRequestPromises = links.map(link => requestHTMLAndGetLinksForURL(link).catch(error => {
+            if (error) {
+                console.log(error, "getLinksFromArrayOfLinks error");
+            }
+        }));
         return Promise.all(linkRequestPromises).then(arrayOfLinksFromFirstSet => {
             const dupedSecondSetOfLinks = [].concat(...arrayOfLinksFromFirstSet);
             const secondSetOfLinks = uniq(dupedSecondSetOfLinks);

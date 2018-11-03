@@ -6,15 +6,25 @@ const testURL = "https://www.contactusinc.com/";
 runFromStartURL(testURL);
 
 async function runFromStartURL(startURL) {
+  console.log("–––––––– Started Getting Links");
   // Fetch links for two levels deep
   const firstSetOfURLs = await requestHTMLAndGetLinksForURL(startURL);
   const secondSetOfURLs = await getLinksFromArrayOfLinks(firstSetOfURLs);
-  const mergedURLs = firstSetOfURLs.concat(secondSetOfURLs);
+  const mergedURLs = firstSetOfURLs.concat(secondSetOfURLs).filter(x => x);
+  console.log("–––––––– Finished getting links");
 
+  console.log("–––––––– Started scraping urls");
   // Get web scrape infos which are url with [emails] and [phones]
   const allWebsScrapeInfos = await fetchWebScrapeInfoForAllUrls(mergedURLs);
+  console.log("–––––––– Finished scraping urls");
+
+  const items = webScrapeInfosToItemsWithSources(allWebsScrapeInfos);
+  return items;
+}
+
+function webScrapeInfosToItemsWithSources(webScrapeInfos): ItemWithSources[] {
   // Filter out completely empty web infos
-  const filteredWebScrapeInfos = allWebsScrapeInfos.filter(
+  const filteredWebScrapeInfos = webScrapeInfos.filter(
     info =>
       info !== undefined &&
       (!isArrayEmpty(info.emails) || !isArrayEmpty(info.phoneNumbers))
@@ -53,7 +63,6 @@ async function runFromStartURL(startURL) {
     );
   });
 
-  // done here
   return validItems;
 }
 
@@ -105,17 +114,21 @@ function isArrayEmpty(array) {
 }
 
 async function fetchWebScrapeInfoForAllUrls(urls): Promise<WebScrapeInfo[]> {
-  // @TODO: throw errors
-  const searchRequests = urls.map(url =>
-    findEmailsAndPhonesForURL(url).catch(error => {
+  const htmlRequests = urls.map(url => {
+    return requestHTMLFromURL(url).catch(error => {
       if (error) {
-        console.log(error, "error for: requestHTMLAndFindEmailAndPhonesForURL");
+        console.log(
+          error,
+          "fetchWebScrapeInfoForAllUrls.requestHTMLFromURL error"
+        );
       }
-    })
-  );
+    });
+  });
 
-  return Promise.all<WebScrapeInfo>(searchRequests).then(webScrapeInfos => {
-    return webScrapeInfos;
+  return Promise.all<WebScrapeInfo>(htmlRequests).then(requestResponses => {
+    return requestResponses
+      .filter(x => x)
+      .map(response => findEmailsAndPhonesForRequestResponse(response));
   });
 }
 
@@ -130,12 +143,27 @@ class WebScrapeInfo {
   }
 }
 
-function requestHTMLFromURL(url) {
+class WebsiteHTMLResponse {
+  url: string;
+  html: string;
+  constructor(url: string, html: string) {
+    this.url = url;
+    this.html = html;
+  }
+}
+
+function requestHTMLFromURL(url): Promise<WebsiteHTMLResponse> {
   const request = require("request");
   return new Promise(function(resolve, reject) {
     request(url, function(error, res, body) {
       if (!error && res.statusCode == 200) {
-        resolve(body);
+        console.log(body === undefined);
+        if (body === undefined) {
+          reject(new Error("No html returned from page"));
+          return;
+        }
+        const response = new WebsiteHTMLResponse(url, body);
+        resolve(response);
       } else {
         reject(error);
       }
@@ -143,27 +171,34 @@ function requestHTMLFromURL(url) {
   });
 }
 
-async function findEmailsAndPhonesForURL(url): Promise<WebScrapeInfo> {
-  const html = await requestHTMLFromURL(url).catch(error => {
-    throw error;
-  });
+function findEmailsAndPhonesForRequestResponse(requestResponse): WebScrapeInfo {
+  const html = requestResponse.html;
+
   // search for phone or email in html
   const emailArrays = matchingEmailsFrom(html).filter(x => x);
 
   const phoneArrays = matchPhoneNumbersFrom(html).filter(x => x);
 
-  return new WebScrapeInfo(url, uniq(emailArrays), uniq(phoneArrays));
+  return new WebScrapeInfo(
+    requestResponse.url,
+    uniq(emailArrays),
+    uniq(phoneArrays)
+  );
 }
 
 async function requestHTMLAndGetLinksForURL(url) {
-  const html = await requestHTMLFromURL(url);
-  const links = await getAllLinksInHTML(html);
+  const response = await requestHTMLFromURL(url);
+  const links = await getAllLinksInHTML(response.html);
   return links;
 }
 
 async function getLinksFromArrayOfLinks(links) {
   const linkRequestPromises = links.map(link =>
-    requestHTMLAndGetLinksForURL(link)
+    requestHTMLAndGetLinksForURL(link).catch(error => {
+      if (error) {
+        console.log(error, "getLinksFromArrayOfLinks error");
+      }
+    })
   );
 
   return Promise.all(linkRequestPromises).then(arrayOfLinksFromFirstSet => {
