@@ -26,10 +26,13 @@ const emails = [
   "faceglee@verizon.net"
 ];
 
-const e = emails.map(email =>
-  matchFirstNameLastNameToEmail("face", "glee", email)
-);
-console.log(e);
+console.log(getMatchingEmailsFor("face", "glee", emails));
+
+function getMatchingEmailsFor(firstName, lastName, emails) {
+  return emails
+    .map(email => matchFirstNameLastNameToEmail("face", "glee", email))
+    .filter(matchingResponse => matchingResponse.matches == true);
+}
 
 function matchFirstNameLastNameToEmail(
   firstName,

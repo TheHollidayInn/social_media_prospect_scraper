@@ -1,13 +1,63 @@
-import { InfoItemWithSource, ItemWithSources } from "./InfoItemWithSource.js";
+class InfoItemWithSource {
+  urlSource: string;
+  item: string;
+  // @TODO: make enum
+  type: number;
+
+  constructor(urlSource: string, item: string, type: number) {
+    this.urlSource = urlSource;
+    this.item = item;
+    this.type = type;
+  }
+
+  isEmail() {
+    return this.type == -0;
+  }
+
+  isPhone() {
+    return this.type === 1;
+  }
+}
+
+class ItemWithSources {
+  item: string;
+  sources: string[];
+  type: number;
+  constructor(item: string, sources: string[], type: number) {
+    this.item = item;
+    this.sources = sources;
+    this.type = type;
+  }
+}
+
+class WebScrapeInfo {
+  url: string;
+  emails: any[];
+  phoneNumbers: any[];
+  constructor(url: string, emails: any[], phoneNumbers: any[]) {
+    this.url = url;
+    this.emails = emails;
+    this.phoneNumbers = phoneNumbers;
+  }
+}
+
+class WebsiteHTMLResponse {
+  url: string;
+  html: string;
+  constructor(url: string, html: string) {
+    this.url = url;
+    this.html = html;
+  }
+}
 
 // const testURL = "https://www.contactusinc.com/";
 const testURL = "https://www.bonjoro.com/";
 
 // @TODO: turn into export function
-runFromStartURL(testURL);
+scrapeURLForEmailorPhoneitems(testURL);
 
-async function runFromStartURL(startURL) {
-  console.log("–––––––– Started Getting Links");
+async function scrapeURLForEmailorPhoneitems(startURL) {
+  console.log("–––––––– Started getting links");
   // Fetch links for two levels deep
   const firstSetOfURLs = await requestHTMLAndGetLinksForURL(startURL);
   const secondSetOfURLs = await getLinksFromArrayOfLinks(firstSetOfURLs);
@@ -17,14 +67,16 @@ async function runFromStartURL(startURL) {
   const finalURLs = mergedURLs
     .filter(x => x)
     .filter(url => extractRootDomain(url) === rootURL);
-  console.log("–––––––– Finished getting links");
+  console.log(`–––––––– Finished getting ${finalURLs.length} links`);
 
   console.log("–––––––– Started scraping urls");
   // Get web scrape infos which are url with [emails] and [phones]
   const allWebsScrapeInfos = await fetchWebScrapeInfoForAllUrls(finalURLs);
-  console.log("–––––––– Finished scraping urls");
+  console.log(`–––––––– Finished scraping ${allWebsScrapeInfos.length} urls`);
 
   const items = webScrapeInfosToItemsWithSources(allWebsScrapeInfos);
+
+  console.log(`–––––––– returning/found ${items.length} Email or Phone items`);
   return items;
 }
 
@@ -136,26 +188,6 @@ async function fetchWebScrapeInfoForAllUrls(urls): Promise<WebScrapeInfo[]> {
       .filter(x => x)
       .map(response => findEmailsAndPhonesForRequestResponse(response));
   });
-}
-
-class WebScrapeInfo {
-  url: string;
-  emails: any[];
-  phoneNumbers: any[];
-  constructor(url: string, emails: any[], phoneNumbers: any[]) {
-    this.url = url;
-    this.emails = emails;
-    this.phoneNumbers = phoneNumbers;
-  }
-}
-
-class WebsiteHTMLResponse {
-  url: string;
-  html: string;
-  constructor(url: string, html: string) {
-    this.url = url;
-    this.html = html;
-  }
 }
 
 function requestHTMLFromURL(url): Promise<WebsiteHTMLResponse> {

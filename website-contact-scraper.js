@@ -1,4 +1,3 @@
-"use strict";
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     return new (P || (P = Promise))(function (resolve, reject) {
         function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -7,15 +6,46 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-Object.defineProperty(exports, "__esModule", { value: true });
-const InfoItemWithSource_js_1 = require("./InfoItemWithSource.js");
+class InfoItemWithSource {
+    constructor(urlSource, item, type) {
+        this.urlSource = urlSource;
+        this.item = item;
+        this.type = type;
+    }
+    isEmail() {
+        return this.type == -0;
+    }
+    isPhone() {
+        return this.type === 1;
+    }
+}
+class ItemWithSources {
+    constructor(item, sources, type) {
+        this.item = item;
+        this.sources = sources;
+        this.type = type;
+    }
+}
+class WebScrapeInfo {
+    constructor(url, emails, phoneNumbers) {
+        this.url = url;
+        this.emails = emails;
+        this.phoneNumbers = phoneNumbers;
+    }
+}
+class WebsiteHTMLResponse {
+    constructor(url, html) {
+        this.url = url;
+        this.html = html;
+    }
+}
 // const testURL = "https://www.contactusinc.com/";
 const testURL = "https://www.bonjoro.com/";
 // @TODO: turn into export function
-runFromStartURL(testURL);
-function runFromStartURL(startURL) {
+scrapeURLForEmailorPhoneitems(testURL);
+function scrapeURLForEmailorPhoneitems(startURL) {
     return __awaiter(this, void 0, void 0, function* () {
-        console.log("–––––––– Started Getting Links");
+        console.log("–––––––– Started getting links");
         // Fetch links for two levels deep
         const firstSetOfURLs = yield requestHTMLAndGetLinksForURL(startURL);
         const secondSetOfURLs = yield getLinksFromArrayOfLinks(firstSetOfURLs);
@@ -25,12 +55,13 @@ function runFromStartURL(startURL) {
         const finalURLs = mergedURLs
             .filter(x => x)
             .filter(url => extractRootDomain(url) === rootURL);
-        console.log("–––––––– Finished getting links");
+        console.log(`–––––––– Finished getting ${finalURLs.length} links`);
         console.log("–––––––– Started scraping urls");
         // Get web scrape infos which are url with [emails] and [phones]
         const allWebsScrapeInfos = yield fetchWebScrapeInfoForAllUrls(finalURLs);
-        console.log("–––––––– Finished scraping urls");
+        console.log(`–––––––– Finished scraping ${allWebsScrapeInfos.length} urls`);
         const items = webScrapeInfosToItemsWithSources(allWebsScrapeInfos);
+        console.log(`–––––––– returning/found ${items.length} Email or Phone items`);
         return items;
     });
 }
@@ -48,7 +79,7 @@ function webScrapeInfosToItemsWithSources(webScrapeInfos) {
         const itemToFind = object.item;
         const allMatchingItemsWithSource = getAllObjectsWithMatchingItem(allItems, itemToFind);
         const sources = allMatchingItemsWithSource.map(x => x.urlSource);
-        return new InfoItemWithSource_js_1.ItemWithSources(itemToFind, sources, object.type);
+        return new ItemWithSources(itemToFind, sources, object.type);
     });
     // remove duplicates
     const uniqueItemsWithSources = removeDuplicates(itemsWithSources, "item");
@@ -71,7 +102,7 @@ function seperateScrapeInfosIntoURLEmailArray(webScrapeInfos) {
     const items = filteredInfos.map(info => {
         const url = info.url;
         return info.emails.map(email => {
-            return new InfoItemWithSource_js_1.InfoItemWithSource(url, email, 0);
+            return new InfoItemWithSource(url, email, 0);
         });
     });
     return [].concat(...items);
@@ -81,7 +112,7 @@ function seperateScrapeInfosIntoURLPhoneArray(webScrapeInfos) {
     const items = filteredInfos.map(info => {
         const url = info.url;
         return info.phoneNumbers.map(phone => {
-            return new InfoItemWithSource_js_1.InfoItemWithSource(url, phone, 1);
+            return new InfoItemWithSource(url, phone, 1);
         });
     });
     return [].concat(...items);
@@ -111,19 +142,6 @@ function fetchWebScrapeInfoForAllUrls(urls) {
                 .map(response => findEmailsAndPhonesForRequestResponse(response));
         });
     });
-}
-class WebScrapeInfo {
-    constructor(url, emails, phoneNumbers) {
-        this.url = url;
-        this.emails = emails;
-        this.phoneNumbers = phoneNumbers;
-    }
-}
-class WebsiteHTMLResponse {
-    constructor(url, html) {
-        this.url = url;
-        this.html = html;
-    }
 }
 function requestHTMLFromURL(url) {
     const request = require("request");
