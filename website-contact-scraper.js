@@ -1,11 +1,5 @@
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
 class InfoItemWithSource {
     constructor(urlSource, item, type) {
         this.urlSource = urlSource;
@@ -39,47 +33,132 @@ class WebsiteHTMLResponse {
         this.html = html;
     }
 }
-const testURL = "https://www.roosterteeth.com/";
-// const testURL = "https://www.contactusinc.com/";
+class PageScrapeInfo {
+    constructor(url, webScrapeInfo, foundURLS) {
+        this.url = url;
+        this.webScrapeInfo = webScrapeInfo;
+        this.foundURLS = foundURLS;
+    }
+}
+// const testURL = "https://www.roosterteeth.com/";
+const testURL = "https://www.contactusinc.com/";
 // const testURL = "https://www.bonjoro.com/";
 // @TODO: turn into export function
 // scrapeURLForEmailorPhoneitems(testURL);
-(() => __awaiter(this, void 0, void 0, function* () {
+startScrapingFromURL(testURL);
+async function startScrapingFromURL(startURL) {
+    console.time("startScrapingFromURL");
     const puppeteer = require("puppeteer");
-    const browser = yield puppeteer.launch();
-    const response = yield getHTMLForURLUsingPuppeteerBrowser(testURL, browser);
-    console.log(response != undefined);
-    yield browser.close();
-    console.log("done");
-}))();
-function scrapeURLForEmailorPhoneitems(startURL) {
-    return __awaiter(this, void 0, void 0, function* () {
-        console.time("getting links");
-        console.log("–––––––– Started getting links");
-        // Fetch links for three levels deep
-        const firstSetOfURLs = yield requestHTMLAndGetLinksForURL(startURL);
-        const secondSetOfURLs = yield getLinksFromArrayOfLinks(firstSetOfURLs);
-        const thirdSetOfURLs = yield getLinksFromArrayOfLinks(secondSetOfURLs);
-        const mergedURLs = firstSetOfURLs
-            .concat(secondSetOfURLs)
-            .concat(thirdSetOfURLs);
-        // filter urls that do not match the startUrl's domain
-        const rootURL = extractRootDomain(startURL);
-        const finalURLs = mergedURLs
-            .filter(x => x)
-            .filter(url => extractRootDomain(url) === rootURL);
-        console.log(`–––––––– Finished getting ${finalURLs.length} links`);
-        console.timeEnd("getting links");
-        console.time("scraping urls");
-        console.log("–––––––– Started scraping urls");
-        // Get web scrape infos which are url with [emails] and [phones]
-        const allWebsScrapeInfos = yield fetchWebScrapeInfoForAllUrls(finalURLs);
-        console.log(`–––––––– Finished scraping ${allWebsScrapeInfos.length} urls`);
-        console.timeEnd("scraping urls");
-        const items = webScrapeInfosToItemsWithSources(allWebsScrapeInfos);
-        console.log(`–––––––– returning/found ${items.length} Email or Phone items`);
-        return items;
+    const browser = await puppeteer.launch();
+    // Scrape start url
+    const firstPageInfo = await scrapeURLWithBrowser(testURL, browser);
+    // Scrape second level deep
+    console.log("––––––– started SECOND set of scraping");
+    const secondSetOfPageInfos = await scrapeMultipleURLSWithBrowser(firstPageInfo.foundURLS, browser);
+    // @TODO: throw for no found urls or null web info
+    const currentURLS = secondSetOfPageInfos
+        .filter(info => info.foundURLS)
+        .map(info => info.foundURLS);
+    const mergedURLs = []
+        .concat(...currentURLS)
+        .filter(url => !firstPageInfo.foundURLS.includes(url));
+    const uniqueMergedURLs = uniq(mergedURLs);
+    console.log(uniqueMergedURLs.length, "unique merged urls");
+    // Scrape one more level deep
+    console.log("––––––– started THIRD set of scraping");
+    const thirdSetOfPageInfos = await scrapeMultipleURLSWithBrowser(uniqueMergedURLs, browser);
+    console.timeEnd("startScrapingFromURL");
+    console.log(secondSetOfPageInfos
+        .filter(x => x.webScrapeInfo)
+        .map(x => x.webScrapeInfo.emails).length, "second set");
+    console.log(thirdSetOfPageInfos
+        .filter(x => x.webScrapeInfo)
+        .map(x => x.webScrapeInfo.emails).length, "third set");
+    await browser.close();
+}
+async function scrapeURLWithBrowser(url, browser) {
+    const response = await getHTMLForURLUsingPuppeteerBrowser(url, browser);
+    const html = response.html;
+    const links = getAllLinksInHTML(html);
+    const webScrapeInfo = getEmailsAndPhonesForHTML(html, response.url);
+    return new PageScrapeInfo(response.url, webScrapeInfo, links);
+}
+async function scrapeMultipleURLSWithBrowser(urls, browser) {
+    // const linkRequestPromises: Promise<PageScrapeInfo>[] = urls.map(url =>
+    //   scrapeURLWithBrowser(url, browser).catch(error => {
+    //     if (error) {
+    //       console.log(error, "scrapeMultipleURLSWithBrowser error");
+    //     }
+    //   })
+    // );
+    let results = [];
+    await processMutlipleURLs(urls, browser).then(function (result) {
+        results = result;
+    }, function (reason) {
+        // rejection happened
+        console.log(reason, "rejection");
     });
+    // const pageInfos: PageScrapeInfo[] = await Promise.all<PageScrapeInfo>(
+    //   urls.map(async url => {
+    //     console.log("started url ");
+    //     const response = await scrapeURLWithBrowser(url, browser).catch(error =>
+    //       console.log(error)
+    //     );
+    //     console.log("ended url ");
+    //     return response;
+    //   })
+    // );
+    // console.log(pageInfos.length, "pageInfos.length");
+    // return pageInfos;
+    return results;
+    // return Promise.all(linkRequestPromises).then(pageInfos => uniq(pageInfos));
+    // return Promise.all(linkRequestPromises).then(arrayOfLinksFromFirstSet => {
+    //   const dupedSecondSetOfLinks = [].concat(...arrayOfLinksFromFirstSet);
+    //   const secondSetOfLinks = uniq(dupedSecondSetOfLinks);
+    //   const linksInSecondSetNotInFirst = secondSetOfLinks.filter(
+    //     link => !urls.includes(link)
+    //   );
+    //   return linksInSecondSetNotInFirst;
+    // });
+}
+async function processMutlipleURLs(urls, browser) {
+    let results = [];
+    for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+        console.log(`started url ${url}`);
+        let r = await scrapeURLWithBrowser(url, browser).catch(x => console.log(x));
+        console.log(`finished url ${url}`);
+        results.push(r);
+    }
+    return results;
+}
+async function scrapeURLForEmailorPhoneitems(startURL) {
+    console.time("getting links");
+    console.log("–––––––– Started getting links");
+    // Fetch links for three levels deep
+    const firstSetOfURLs = await requestHTMLAndGetLinksForURL(startURL);
+    const secondSetOfURLs = await getLinksFromArrayOfLinks(firstSetOfURLs);
+    const thirdSetOfURLs = await getLinksFromArrayOfLinks(secondSetOfURLs);
+    const mergedURLs = firstSetOfURLs
+        .concat(secondSetOfURLs)
+        .concat(thirdSetOfURLs);
+    // filter urls that do not match the startUrl's domain
+    const rootURL = extractRootDomain(startURL);
+    const finalURLs = mergedURLs
+        .filter(x => x)
+        .filter(url => extractRootDomain(url) === rootURL);
+    console.log(`–––––––– Finished getting ${finalURLs.length} links`);
+    console.timeEnd("getting links");
+    console.time("scraping urls");
+    console.log("–––––––– Started scraping urls");
+    // Get web scrape infos which are url with [emails] and [phones]
+    const allWebsScrapeInfos = await fetchWebScrapeInfoForAllUrls(finalURLs);
+    console.log(`–––––––– Finished scraping ${allWebsScrapeInfos.length} urls`);
+    console.timeEnd("scraping urls");
+    const items = webScrapeInfosToItemsWithSources(allWebsScrapeInfos);
+    console.log(`–––––––– scrape infos found: ${allWebsScrapeInfos.length}`);
+    console.log(`–––––––– returning/found ${items.length} Email or Phone items`);
+    return items;
 }
 function webScrapeInfosToItemsWithSources(webScrapeInfos) {
     // Filter out completely empty web infos
@@ -143,37 +222,34 @@ function isArrayEmpty(array) {
     }
     return false;
 }
-function fetchWebScrapeInfoForAllUrls(urls) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const htmlRequests = urls.map(url => {
-            return requestHTMLFromURL(url).catch(error => {
-                if (error) {
-                    console.log(error, "fetchWebScrapeInfoForAllUrls.requestHTMLFromURL error");
-                }
-            });
+async function fetchWebScrapeInfoForAllUrls(urls) {
+    const htmlRequests = urls.map(url => {
+        return requestHTMLFromURL(url).catch(error => {
+            if (error) {
+                console.log(error, "fetchWebScrapeInfoForAllUrls.requestHTMLFromURL error");
+            }
         });
-        return Promise.all(htmlRequests).then(requestResponses => {
-            return requestResponses
-                .filter(x => x)
-                .map(response => findEmailsAndPhonesForRequestResponse(response));
-        });
+    });
+    return Promise.all(htmlRequests).then(requestResponses => {
+        return requestResponses
+            .filter(x => x)
+            .map(response => findEmailsAndPhonesForRequestResponse(response));
     });
 }
 // MARK: Puppeteer Retrieve html
-function getHTMLForURLUsingPuppeteerBrowser(url, browser) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const page = yield browser.newPage();
-        yield page.goto(url);
-        // @TODO: make waiting work
-        // await page.waitForNavigation({ waitUntil: "networkidle0" });
-        const body = yield page.evaluate(() => document.body.innerHTML);
-        if (body === undefined) {
-            throw new Error("No html returned from page");
-            return;
-        }
-        const response = new WebsiteHTMLResponse(url, body);
-        return response;
-    });
+async function getHTMLForURLUsingPuppeteerBrowser(url, browser) {
+    const page = await browser.newPage();
+    await page.goto(url);
+    page.waitFor(400);
+    // @TODO: make waiting work
+    // await page.waitForNavigation({ waitUntil: "networkidle0" });
+    const body = await page.evaluate(() => document.body.innerHTML);
+    if (body === undefined) {
+        throw new Error("No html returned from page");
+        return;
+    }
+    const response = new WebsiteHTMLResponse(url, body);
+    return response;
 }
 function requestHTMLFromURL(url) {
     const request = require("request");
@@ -193,6 +269,12 @@ function requestHTMLFromURL(url) {
         });
     });
 }
+function getEmailsAndPhonesForHTML(html, url) {
+    // search for phone or email in html
+    const emailArrays = matchingEmailsFrom(html).filter(x => x);
+    const phoneArrays = matchPhoneNumbersFrom(html).filter(x => x);
+    return new WebScrapeInfo(url, uniq(emailArrays), uniq(phoneArrays));
+}
 function findEmailsAndPhonesForRequestResponse(requestResponse) {
     const html = requestResponse.html;
     // search for phone or email in html
@@ -200,26 +282,22 @@ function findEmailsAndPhonesForRequestResponse(requestResponse) {
     const phoneArrays = matchPhoneNumbersFrom(html).filter(x => x);
     return new WebScrapeInfo(requestResponse.url, uniq(emailArrays), uniq(phoneArrays));
 }
-function requestHTMLAndGetLinksForURL(url) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const response = yield requestHTMLFromURL(url);
-        const links = yield getAllLinksInHTML(response.html);
-        return links;
-    });
+async function requestHTMLAndGetLinksForURL(url) {
+    const response = await requestHTMLFromURL(url);
+    const links = await getAllLinksInHTML(response.html);
+    return links;
 }
-function getLinksFromArrayOfLinks(links) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const linkRequestPromises = links.map(link => requestHTMLAndGetLinksForURL(link).catch(error => {
-            if (error) {
-                console.log(error, "getLinksFromArrayOfLinks error");
-            }
-        }));
-        return Promise.all(linkRequestPromises).then(arrayOfLinksFromFirstSet => {
-            const dupedSecondSetOfLinks = [].concat(...arrayOfLinksFromFirstSet);
-            const secondSetOfLinks = uniq(dupedSecondSetOfLinks);
-            const linksInSecondSetNotInFirst = secondSetOfLinks.filter(link => !links.includes(link));
-            return linksInSecondSetNotInFirst;
-        });
+async function getLinksFromArrayOfLinks(links) {
+    const linkRequestPromises = links.map(link => requestHTMLAndGetLinksForURL(link).catch(error => {
+        if (error) {
+            console.log(error, "getLinksFromArrayOfLinks error");
+        }
+    }));
+    return Promise.all(linkRequestPromises).then(arrayOfLinksFromFirstSet => {
+        const dupedSecondSetOfLinks = [].concat(...arrayOfLinksFromFirstSet);
+        const secondSetOfLinks = uniq(dupedSecondSetOfLinks);
+        const linksInSecondSetNotInFirst = secondSetOfLinks.filter(link => !links.includes(link));
+        return linksInSecondSetNotInFirst;
     });
 }
 function getAllLinksInHTML(html) {
