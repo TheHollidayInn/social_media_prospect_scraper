@@ -50,29 +50,46 @@ class WebsiteHTMLResponse {
   }
 }
 
+const testURL = "https://www.roosterteeth.com/";
 // const testURL = "https://www.contactusinc.com/";
-const testURL = "https://www.bonjoro.com/";
+// const testURL = "https://www.bonjoro.com/";
 
 // @TODO: turn into export function
-scrapeURLForEmailorPhoneitems(testURL);
+// scrapeURLForEmailorPhoneitems(testURL);
+
+(async () => {
+  const puppeteer = require("puppeteer");
+  const browser = await puppeteer.launch();
+  const response = await getHTMLForURLUsingPuppeteerBrowser(testURL, browser);
+  console.log(response != undefined);
+  await browser.close();
+  console.log("done");
+})();
 
 async function scrapeURLForEmailorPhoneitems(startURL) {
+  console.time("getting links");
   console.log("–––––––– Started getting links");
-  // Fetch links for two levels deep
+  // Fetch links for three levels deep
   const firstSetOfURLs = await requestHTMLAndGetLinksForURL(startURL);
   const secondSetOfURLs = await getLinksFromArrayOfLinks(firstSetOfURLs);
-  const mergedURLs = firstSetOfURLs.concat(secondSetOfURLs);
+  const thirdSetOfURLs = await getLinksFromArrayOfLinks(secondSetOfURLs);
+  const mergedURLs = firstSetOfURLs
+    .concat(secondSetOfURLs)
+    .concat(thirdSetOfURLs);
   // filter urls that do not match the startUrl's domain
   const rootURL = extractRootDomain(startURL);
   const finalURLs = mergedURLs
     .filter(x => x)
     .filter(url => extractRootDomain(url) === rootURL);
   console.log(`–––––––– Finished getting ${finalURLs.length} links`);
+  console.timeEnd("getting links");
 
+  console.time("scraping urls");
   console.log("–––––––– Started scraping urls");
   // Get web scrape infos which are url with [emails] and [phones]
   const allWebsScrapeInfos = await fetchWebScrapeInfoForAllUrls(finalURLs);
   console.log(`–––––––– Finished scraping ${allWebsScrapeInfos.length} urls`);
+  console.timeEnd("scraping urls");
 
   const items = webScrapeInfosToItemsWithSources(allWebsScrapeInfos);
 
@@ -188,6 +205,24 @@ async function fetchWebScrapeInfoForAllUrls(urls): Promise<WebScrapeInfo[]> {
       .filter(x => x)
       .map(response => findEmailsAndPhonesForRequestResponse(response));
   });
+}
+
+// MARK: Puppeteer Retrieve html
+async function getHTMLForURLUsingPuppeteerBrowser(
+  url,
+  browser
+): Promise<WebsiteHTMLResponse> {
+  const page = await browser.newPage();
+  await page.goto(url);
+  // @TODO: make waiting work
+  // await page.waitForNavigation({ waitUntil: "networkidle0" });
+  const body = await page.evaluate(() => document.body.innerHTML);
+  if (body === undefined) {
+    throw new Error("No html returned from page");
+    return;
+  }
+  const response = new WebsiteHTMLResponse(url, body);
+  return response;
 }
 
 function requestHTMLFromURL(url): Promise<WebsiteHTMLResponse> {
