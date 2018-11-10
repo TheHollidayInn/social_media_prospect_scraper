@@ -10,6 +10,7 @@ const queue = new Queue(
     //   host: 'somewhereElse'
     // },
     isWorker: true,
+    removeOnSuccess: true,
   },
 );
 
