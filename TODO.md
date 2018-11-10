@@ -5,3 +5,4 @@
  - [ ] Logs
  - [ ] Docker
  - [ ] DataDog/Or Similar
+ - [ ] Add dotenv
