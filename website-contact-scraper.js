@@ -20,7 +20,7 @@ class ItemWithSources {
         this.type = type;
     }
 }
-class WebScrapeInfo {
+class EmailAndPhoneScrapeInfo {
     constructor(url, emails, phoneNumbers) {
         this.url = url;
         this.emails = emails;
@@ -34,20 +34,20 @@ class WebsiteHTMLResponse {
     }
 }
 class PageScrapeInfo {
-    constructor(url, webScrapeInfo, foundURLS) {
+    constructor(url, emailAndPhoneScrapeInfo, foundURLS) {
         this.url = url;
-        this.webScrapeInfo = webScrapeInfo;
+        this.emailAndPhoneScrapeInfo = emailAndPhoneScrapeInfo;
         this.foundURLS = foundURLS;
     }
 }
-// const testURL = "https://www.roosterteeth.com/";
-const testURL = "https://www.contactusinc.com/";
+const testURL = "https://www.roosterteeth.com/";
+// const testURL = "https://www.contactusinc.com/";
 // const testURL = "https://www.bonjoro.com/";
 // @TODO: turn into export function
 // scrapeURLForEmailorPhoneitems(testURL);
 startScrapingFromURL(testURL);
 async function startScrapingFromURL(startURL) {
-    console.time("scrapingURLS");
+    const start = Date.now();
     const puppeteer = require("puppeteer");
     const browser = await puppeteer.launch();
     // Scrape start url
@@ -68,38 +68,26 @@ async function startScrapingFromURL(startURL) {
     // Scrape one more level deep
     console.log("––––––– started THIRD set of scraping");
     const thirdSetOfPageInfos = await scrapeMultipleURLSWithBrowser(uniqueMergedURLs, browser);
-    console.timeEnd("scrapingURLS");
-    const firstEmails = firstPageInfo.webScrapeInfo.emails;
-    const secondSetOfEmails = secondSetOfPageInfos
+    const allPageInfos = [firstPageInfo]
+        .concat(...secondSetOfPageInfos)
+        .concat(...thirdSetOfPageInfos)
         .filter(x => x)
-        .filter(x => x.webScrapeInfo)
-        .map(x => x.webScrapeInfo.emails);
-    const thirdSetOfEmails = thirdSetOfPageInfos
-        .filter(x => x)
-        .filter(x => x.webScrapeInfo)
-        .map(x => x.webScrapeInfo.emails);
-    const allEmails = []
-        .concat(...firstEmails)
-        .concat(...secondSetOfEmails)
-        .concat(...thirdSetOfEmails);
-    console.log(uniq(allEmails), "all emails found");
+        .filter(x => x.emailAndPhoneScrapeInfo)
+        .map(x => x.emailAndPhoneScrapeInfo);
+    const items = emailAndPhoneScrapeInfosToItemsWithSources(uniq(allPageInfos));
+    console.log(items);
+    const endTime = (Date.now() - start) / 1000;
+    console.log(`––––––– total time elapsed for all url scraping and filtering: ${endTime} secs`);
     await browser.close();
 }
 async function scrapeURLWithBrowser(url, browser) {
     const response = await getHTMLForURLUsingPuppeteerBrowser(url, browser);
     const html = response.html;
     const links = getAllLinksInHTML(html);
-    const webScrapeInfo = getEmailsAndPhonesForHTML(html, response.url);
-    return new PageScrapeInfo(response.url, webScrapeInfo, links);
+    const emailAndPhoneScrapeInfo = getEmailsAndPhonesForHTML(html, response.url);
+    return new PageScrapeInfo(response.url, emailAndPhoneScrapeInfo, links);
 }
 async function scrapeMultipleURLSWithBrowser(urls, browser) {
-    // const linkRequestPromises: Promise<PageScrapeInfo>[] = urls.map(url =>
-    //   scrapeURLWithBrowser(url, browser).catch(error => {
-    //     if (error) {
-    //       console.log(error, "scrapeMultipleURLSWithBrowser error");
-    //     }
-    //   })
-    // );
     let results = [];
     await processMutlipleURLs(urls, browser).then(function (result) {
         results = result;
@@ -107,28 +95,7 @@ async function scrapeMultipleURLSWithBrowser(urls, browser) {
         // rejection happened
         console.log(reason, "rejection");
     });
-    // const pageInfos: PageScrapeInfo[] = await Promise.all<PageScrapeInfo>(
-    //   urls.map(async url => {
-    //     console.log("started url ");
-    //     const response = await scrapeURLWithBrowser(url, browser).catch(error =>
-    //       console.log(error)
-    //     );
-    //     console.log("ended url ");
-    //     return response;
-    //   })
-    // );
-    // console.log(pageInfos.length, "pageInfos.length");
-    // return pageInfos;
     return results;
-    // return Promise.all(linkRequestPromises).then(pageInfos => uniq(pageInfos));
-    // return Promise.all(linkRequestPromises).then(arrayOfLinksFromFirstSet => {
-    //   const dupedSecondSetOfLinks = [].concat(...arrayOfLinksFromFirstSet);
-    //   const secondSetOfLinks = uniq(dupedSecondSetOfLinks);
-    //   const linksInSecondSetNotInFirst = secondSetOfLinks.filter(
-    //     link => !urls.includes(link)
-    //   );
-    //   return linksInSecondSetNotInFirst;
-    // });
 }
 async function processMutlipleURLs(urls, browser) {
     let resultTimes = [];
@@ -167,21 +134,21 @@ async function scrapeURLForEmailorPhoneitems(startURL) {
     console.time("scraping urls");
     console.log("–––––––– Started scraping urls");
     // Get web scrape infos which are url with [emails] and [phones]
-    const allWebsScrapeInfos = await fetchWebScrapeInfoForAllUrls(finalURLs);
+    const allWebsScrapeInfos = await fetchEmailAndPhoneScrapeInfoForAllUrls(finalURLs);
     console.log(`–––––––– Finished scraping ${allWebsScrapeInfos.length} urls`);
     console.timeEnd("scraping urls");
-    const items = webScrapeInfosToItemsWithSources(allWebsScrapeInfos);
+    const items = emailAndPhoneScrapeInfosToItemsWithSources(allWebsScrapeInfos);
     console.log(`–––––––– scrape infos found: ${allWebsScrapeInfos.length}`);
     console.log(`–––––––– returning/found ${items.length} Email or Phone items`);
     return items;
 }
-function webScrapeInfosToItemsWithSources(webScrapeInfos) {
+function emailAndPhoneScrapeInfosToItemsWithSources(emailAndPhoneScrapeInfos) {
     // Filter out completely empty web infos
-    const filteredWebScrapeInfos = webScrapeInfos.filter(info => info !== undefined &&
+    const filteredEmailAndPhoneScrapeInfos = emailAndPhoneScrapeInfos.filter(info => info !== undefined &&
         (!isArrayEmpty(info.emails) || !isArrayEmpty(info.phoneNumbers)));
     // seperate all infos into individual items of url and single email or single phone
-    const emailItems = seperateScrapeInfosIntoURLEmailArray(filteredWebScrapeInfos);
-    const phoneItems = seperateScrapeInfosIntoURLPhoneArray(filteredWebScrapeInfos);
+    const emailItems = seperateScrapeInfosIntoURLEmailArray(filteredEmailAndPhoneScrapeInfos);
+    const phoneItems = seperateScrapeInfosIntoURLPhoneArray(filteredEmailAndPhoneScrapeInfos);
     const allItems = emailItems.concat(phoneItems);
     // merge emails/merge phones between items to get email and [urls] or phone and [urls]
     const itemsWithSources = allItems.map(object => {
@@ -207,8 +174,8 @@ function getAllObjectsWithMatchingItem(objects, itemToFind) {
         return obj.item === itemToFind;
     });
 }
-function seperateScrapeInfosIntoURLEmailArray(webScrapeInfos) {
-    const filteredInfos = webScrapeInfos.filter(info => !isArrayEmpty(info.emails));
+function seperateScrapeInfosIntoURLEmailArray(emailAndPhoneScrapeInfos) {
+    const filteredInfos = emailAndPhoneScrapeInfos.filter(info => !isArrayEmpty(info.emails));
     const items = filteredInfos.map(info => {
         const url = info.url;
         return info.emails.map(email => {
@@ -217,8 +184,8 @@ function seperateScrapeInfosIntoURLEmailArray(webScrapeInfos) {
     });
     return [].concat(...items);
 }
-function seperateScrapeInfosIntoURLPhoneArray(webScrapeInfos) {
-    const filteredInfos = webScrapeInfos.filter(info => !isArrayEmpty(info.phoneNumbers));
+function seperateScrapeInfosIntoURLPhoneArray(emailAndPhoneScrapeInfos) {
+    const filteredInfos = emailAndPhoneScrapeInfos.filter(info => !isArrayEmpty(info.phoneNumbers));
     const items = filteredInfos.map(info => {
         const url = info.url;
         return info.phoneNumbers.map(phone => {
@@ -237,11 +204,11 @@ function isArrayEmpty(array) {
     }
     return false;
 }
-async function fetchWebScrapeInfoForAllUrls(urls) {
+async function fetchEmailAndPhoneScrapeInfoForAllUrls(urls) {
     const htmlRequests = urls.map(url => {
         return requestHTMLFromURL(url).catch(error => {
             if (error) {
-                console.log(error, "fetchWebScrapeInfoForAllUrls.requestHTMLFromURL error");
+                console.log(error, "fetchEmailAndPhoneScrapeInfoForAllUrls.requestHTMLFromURL error");
             }
         });
     });
@@ -286,14 +253,14 @@ function getEmailsAndPhonesForHTML(html, url) {
     // search for phone or email in html
     const emailArrays = matchingEmailsFrom(html).filter(x => x);
     const phoneArrays = matchPhoneNumbersFrom(html).filter(x => x);
-    return new WebScrapeInfo(url, uniq(emailArrays), uniq(phoneArrays));
+    return new EmailAndPhoneScrapeInfo(url, uniq(emailArrays), uniq(phoneArrays));
 }
 function findEmailsAndPhonesForRequestResponse(requestResponse) {
     const html = requestResponse.html;
     // search for phone or email in html
     const emailArrays = matchingEmailsFrom(html).filter(x => x);
     const phoneArrays = matchPhoneNumbersFrom(html).filter(x => x);
-    return new WebScrapeInfo(requestResponse.url, uniq(emailArrays), uniq(phoneArrays));
+    return new EmailAndPhoneScrapeInfo(requestResponse.url, uniq(emailArrays), uniq(phoneArrays));
 }
 async function requestHTMLAndGetLinksForURL(url) {
     const response = await requestHTMLFromURL(url);

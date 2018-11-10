@@ -32,7 +32,7 @@ class ItemWithSources {
   }
 }
 
-class WebScrapeInfo {
+class EmailAndPhoneScrapeInfo {
   url: string;
   emails: any[];
   phoneNumbers: any[];
@@ -54,17 +54,21 @@ class WebsiteHTMLResponse {
 
 class PageScrapeInfo {
   url: string;
-  webScrapeInfo: WebScrapeInfo;
+  emailAndPhoneScrapeInfo: EmailAndPhoneScrapeInfo;
   foundURLS: any[];
-  constructor(url: string, webScrapeInfo: WebScrapeInfo, foundURLS: any[]) {
+  constructor(
+    url: string,
+    emailAndPhoneScrapeInfo: EmailAndPhoneScrapeInfo,
+    foundURLS: any[]
+  ) {
     this.url = url;
-    this.webScrapeInfo = webScrapeInfo;
+    this.emailAndPhoneScrapeInfo = emailAndPhoneScrapeInfo;
     this.foundURLS = foundURLS;
   }
 }
 
-// const testURL = "https://www.roosterteeth.com/";
-const testURL = "https://www.contactusinc.com/";
+const testURL = "https://www.roosterteeth.com/";
+// const testURL = "https://www.contactusinc.com/";
 // const testURL = "https://www.bonjoro.com/";
 
 // @TODO: turn into export function
@@ -72,7 +76,8 @@ const testURL = "https://www.contactusinc.com/";
 startScrapingFromURL(testURL);
 
 async function startScrapingFromURL(startURL) {
-  console.time("scrapingURLS");
+  const start = Date.now();
+
   const puppeteer = require("puppeteer");
   const browser = await puppeteer.launch();
 
@@ -102,24 +107,22 @@ async function startScrapingFromURL(startURL) {
     uniqueMergedURLs,
     browser
   );
-  console.timeEnd("scrapingURLS");
 
-  const firstEmails = firstPageInfo.webScrapeInfo.emails;
-  const secondSetOfEmails = secondSetOfPageInfos
+  const allPageInfos = [firstPageInfo]
+    .concat(...secondSetOfPageInfos)
+    .concat(...thirdSetOfPageInfos)
     .filter(x => x)
-    .filter(x => x.webScrapeInfo)
-    .map(x => x.webScrapeInfo.emails);
-  const thirdSetOfEmails = thirdSetOfPageInfos
-    .filter(x => x)
-    .filter(x => x.webScrapeInfo)
-    .map(x => x.webScrapeInfo.emails);
+    .filter(x => x.emailAndPhoneScrapeInfo)
+    .map(x => x.emailAndPhoneScrapeInfo);
 
-  const allEmails = []
-    .concat(...firstEmails)
-    .concat(...secondSetOfEmails)
-    .concat(...thirdSetOfEmails);
-  console.log(uniq(allEmails), "all emails found");
+  const items = emailAndPhoneScrapeInfosToItemsWithSources(uniq(allPageInfos));
 
+  console.log(items);
+
+  const endTime = (Date.now() - start) / 1000;
+  console.log(
+    `––––––– total time elapsed for all url scraping and filtering: ${endTime} secs`
+  );
   await browser.close();
 }
 
@@ -127,21 +130,14 @@ async function scrapeURLWithBrowser(url, browser): Promise<PageScrapeInfo> {
   const response = await getHTMLForURLUsingPuppeteerBrowser(url, browser);
   const html = response.html;
   const links = getAllLinksInHTML(html);
-  const webScrapeInfo = getEmailsAndPhonesForHTML(html, response.url);
-  return new PageScrapeInfo(response.url, webScrapeInfo, links);
+  const emailAndPhoneScrapeInfo = getEmailsAndPhonesForHTML(html, response.url);
+  return new PageScrapeInfo(response.url, emailAndPhoneScrapeInfo, links);
 }
 
 async function scrapeMultipleURLSWithBrowser(
   urls,
   browser
 ): Promise<PageScrapeInfo[]> {
-  // const linkRequestPromises: Promise<PageScrapeInfo>[] = urls.map(url =>
-  //   scrapeURLWithBrowser(url, browser).catch(error => {
-  //     if (error) {
-  //       console.log(error, "scrapeMultipleURLSWithBrowser error");
-  //     }
-  //   })
-  // );
   let results = [];
   await processMutlipleURLs(urls, browser).then(
     function(result) {
@@ -152,31 +148,7 @@ async function scrapeMultipleURLSWithBrowser(
       console.log(reason, "rejection");
     }
   );
-  // const pageInfos: PageScrapeInfo[] = await Promise.all<PageScrapeInfo>(
-  //   urls.map(async url => {
-  //     console.log("started url ");
-  //     const response = await scrapeURLWithBrowser(url, browser).catch(error =>
-  //       console.log(error)
-  //     );
-  //     console.log("ended url ");
-  //     return response;
-  //   })
-  // );
-
-  // console.log(pageInfos.length, "pageInfos.length");
-  // return pageInfos;
   return results;
-  // return Promise.all(linkRequestPromises).then(pageInfos => uniq(pageInfos));
-
-  // return Promise.all(linkRequestPromises).then(arrayOfLinksFromFirstSet => {
-  //   const dupedSecondSetOfLinks = [].concat(...arrayOfLinksFromFirstSet);
-  //   const secondSetOfLinks = uniq(dupedSecondSetOfLinks);
-
-  //   const linksInSecondSetNotInFirst = secondSetOfLinks.filter(
-  //     link => !urls.includes(link)
-  //   );
-  //   return linksInSecondSetNotInFirst;
-  // });
 }
 
 async function processMutlipleURLs(urls, browser) {
@@ -222,29 +194,33 @@ async function scrapeURLForEmailorPhoneitems(startURL) {
   console.time("scraping urls");
   console.log("–––––––– Started scraping urls");
   // Get web scrape infos which are url with [emails] and [phones]
-  const allWebsScrapeInfos = await fetchWebScrapeInfoForAllUrls(finalURLs);
+  const allWebsScrapeInfos = await fetchEmailAndPhoneScrapeInfoForAllUrls(
+    finalURLs
+  );
   console.log(`–––––––– Finished scraping ${allWebsScrapeInfos.length} urls`);
   console.timeEnd("scraping urls");
 
-  const items = webScrapeInfosToItemsWithSources(allWebsScrapeInfos);
+  const items = emailAndPhoneScrapeInfosToItemsWithSources(allWebsScrapeInfos);
   console.log(`–––––––– scrape infos found: ${allWebsScrapeInfos.length}`);
   console.log(`–––––––– returning/found ${items.length} Email or Phone items`);
   return items;
 }
 
-function webScrapeInfosToItemsWithSources(webScrapeInfos): ItemWithSources[] {
+function emailAndPhoneScrapeInfosToItemsWithSources(
+  emailAndPhoneScrapeInfos
+): ItemWithSources[] {
   // Filter out completely empty web infos
-  const filteredWebScrapeInfos = webScrapeInfos.filter(
+  const filteredEmailAndPhoneScrapeInfos = emailAndPhoneScrapeInfos.filter(
     info =>
       info !== undefined &&
       (!isArrayEmpty(info.emails) || !isArrayEmpty(info.phoneNumbers))
   );
   // seperate all infos into individual items of url and single email or single phone
   const emailItems = seperateScrapeInfosIntoURLEmailArray(
-    filteredWebScrapeInfos
+    filteredEmailAndPhoneScrapeInfos
   );
   const phoneItems = seperateScrapeInfosIntoURLPhoneArray(
-    filteredWebScrapeInfos
+    filteredEmailAndPhoneScrapeInfos
   );
   const allItems = emailItems.concat(phoneItems);
 
@@ -283,9 +259,9 @@ function getAllObjectsWithMatchingItem(objects, itemToFind): any[] {
 }
 
 function seperateScrapeInfosIntoURLEmailArray(
-  webScrapeInfos
+  emailAndPhoneScrapeInfos
 ): InfoItemWithSource[] {
-  const filteredInfos = webScrapeInfos.filter(
+  const filteredInfos = emailAndPhoneScrapeInfos.filter(
     info => !isArrayEmpty(info.emails)
   );
   const items = filteredInfos.map(info => {
@@ -298,9 +274,9 @@ function seperateScrapeInfosIntoURLEmailArray(
 }
 
 function seperateScrapeInfosIntoURLPhoneArray(
-  webScrapeInfos
+  emailAndPhoneScrapeInfos
 ): InfoItemWithSource[] {
-  const filteredInfos = webScrapeInfos.filter(
+  const filteredInfos = emailAndPhoneScrapeInfos.filter(
     info => !isArrayEmpty(info.phoneNumbers)
   );
   const items = filteredInfos.map(info => {
@@ -323,23 +299,27 @@ function isArrayEmpty(array) {
   return false;
 }
 
-async function fetchWebScrapeInfoForAllUrls(urls): Promise<WebScrapeInfo[]> {
+async function fetchEmailAndPhoneScrapeInfoForAllUrls(
+  urls
+): Promise<EmailAndPhoneScrapeInfo[]> {
   const htmlRequests = urls.map(url => {
     return requestHTMLFromURL(url).catch(error => {
       if (error) {
         console.log(
           error,
-          "fetchWebScrapeInfoForAllUrls.requestHTMLFromURL error"
+          "fetchEmailAndPhoneScrapeInfoForAllUrls.requestHTMLFromURL error"
         );
       }
     });
   });
 
-  return Promise.all<WebScrapeInfo>(htmlRequests).then(requestResponses => {
-    return requestResponses
-      .filter(x => x)
-      .map(response => findEmailsAndPhonesForRequestResponse(response));
-  });
+  return Promise.all<EmailAndPhoneScrapeInfo>(htmlRequests).then(
+    requestResponses => {
+      return requestResponses
+        .filter(x => x)
+        .map(response => findEmailsAndPhonesForRequestResponse(response));
+    }
+  );
 }
 
 // MARK: Puppeteer Retrieve html
@@ -377,16 +357,18 @@ function requestHTMLFromURL(url): Promise<WebsiteHTMLResponse> {
   });
 }
 
-function getEmailsAndPhonesForHTML(html, url): WebScrapeInfo {
+function getEmailsAndPhonesForHTML(html, url): EmailAndPhoneScrapeInfo {
   // search for phone or email in html
   const emailArrays = matchingEmailsFrom(html).filter(x => x);
 
   const phoneArrays = matchPhoneNumbersFrom(html).filter(x => x);
 
-  return new WebScrapeInfo(url, uniq(emailArrays), uniq(phoneArrays));
+  return new EmailAndPhoneScrapeInfo(url, uniq(emailArrays), uniq(phoneArrays));
 }
 
-function findEmailsAndPhonesForRequestResponse(requestResponse): WebScrapeInfo {
+function findEmailsAndPhonesForRequestResponse(
+  requestResponse
+): EmailAndPhoneScrapeInfo {
   const html = requestResponse.html;
 
   // search for phone or email in html
@@ -394,7 +376,7 @@ function findEmailsAndPhonesForRequestResponse(requestResponse): WebScrapeInfo {
 
   const phoneArrays = matchPhoneNumbersFrom(html).filter(x => x);
 
-  return new WebScrapeInfo(
+  return new EmailAndPhoneScrapeInfo(
     requestResponse.url,
     uniq(emailArrays),
     uniq(phoneArrays)
