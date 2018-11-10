@@ -1,7 +1,7 @@
 # TODO
  - [ ] Tests
  - [ ] Code CLimate
- - [ ] Lint
+ - [x] Lint
  - [ ] Logs
  - [ ] Docker
  - [ ] DataDog/Or Similar
