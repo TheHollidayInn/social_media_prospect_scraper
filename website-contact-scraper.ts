@@ -72,12 +72,12 @@ const testURL = "https://www.contactusinc.com/";
 startScrapingFromURL(testURL);
 
 async function startScrapingFromURL(startURL) {
-  console.time("startScrapingFromURL");
+  console.time("scrapingURLS");
   const puppeteer = require("puppeteer");
   const browser = await puppeteer.launch();
 
   // Scrape start url
-  const firstPageInfo = await scrapeURLWithBrowser(testURL, browser);
+  const firstPageInfo = await scrapeURLWithBrowser(startURL, browser);
   // Scrape second level deep
   console.log("––––––– started SECOND set of scraping");
   const secondSetOfPageInfos = await scrapeMultipleURLSWithBrowser(
@@ -89,30 +89,36 @@ async function startScrapingFromURL(startURL) {
     .filter(info => info.foundURLS)
     .map(info => info.foundURLS);
 
+  const rootURL = extractRootDomain(startURL);
   const mergedURLs = []
     .concat(...currentURLS)
-    .filter(url => !firstPageInfo.foundURLS.includes(url));
+    .filter(url => !firstPageInfo.foundURLS.includes(url))
+    .filter(url => extractRootDomain(url) === rootURL);
+
   const uniqueMergedURLs = uniq(mergedURLs);
-  console.log(uniqueMergedURLs.length, "unique merged urls");
   // Scrape one more level deep
   console.log("––––––– started THIRD set of scraping");
   const thirdSetOfPageInfos = await scrapeMultipleURLSWithBrowser(
     uniqueMergedURLs,
     browser
   );
-  console.timeEnd("startScrapingFromURL");
-  console.log(
-    secondSetOfPageInfos
-      .filter(x => x.webScrapeInfo)
-      .map(x => x.webScrapeInfo.emails).length,
-    "second set"
-  );
-  console.log(
-    thirdSetOfPageInfos
-      .filter(x => x.webScrapeInfo)
-      .map(x => x.webScrapeInfo.emails).length,
-    "third set"
-  );
+  console.timeEnd("scrapingURLS");
+
+  const firstEmails = firstPageInfo.webScrapeInfo.emails;
+  const secondSetOfEmails = secondSetOfPageInfos
+    .filter(x => x)
+    .filter(x => x.webScrapeInfo)
+    .map(x => x.webScrapeInfo.emails);
+  const thirdSetOfEmails = thirdSetOfPageInfos
+    .filter(x => x)
+    .filter(x => x.webScrapeInfo)
+    .map(x => x.webScrapeInfo.emails);
+
+  const allEmails = []
+    .concat(...firstEmails)
+    .concat(...secondSetOfEmails)
+    .concat(...thirdSetOfEmails);
+  console.log(uniq(allEmails), "all emails found");
 
   await browser.close();
 }
@@ -174,14 +180,24 @@ async function scrapeMultipleURLSWithBrowser(
 }
 
 async function processMutlipleURLs(urls, browser) {
+  let resultTimes: number[] = [];
   let results = [];
   for (let i = 0; i < urls.length; i++) {
     const url = urls[i];
-    console.log(`started url ${url}`);
+    const start = Date.now();
     let r = await scrapeURLWithBrowser(url, browser).catch(x => console.log(x));
-    console.log(`finished url ${url}`);
+    const endTime = (Date.now() - start) / 1000;
+    resultTimes.push(endTime);
     results.push(r);
   }
+  const totalTime = resultTimes.reduce((total, number) => total + number);
+  const average = totalTime / resultTimes.length;
+  console.log(
+    `––––––– total time elapsed for ${urls.length} urls: ${totalTime} secs`
+  );
+  console.log(
+    `––––––– average time elapsed for puppeteer request: ${average} secs`
+  );
   return results;
 }
 
@@ -332,10 +348,8 @@ async function getHTMLForURLUsingPuppeteerBrowser(
   browser
 ): Promise<WebsiteHTMLResponse> {
   const page = await browser.newPage();
-  await page.goto(url);
-  page.waitFor(400);
-  // @TODO: make waiting work
-  // await page.waitForNavigation({ waitUntil: "networkidle0" });
+  page.goto(url);
+  await page.waitForNavigation({ waitUntil: "networkidle0" });
   const body = await page.evaluate(() => document.body.innerHTML);
   if (body === undefined) {
     throw new Error("No html returned from page");
