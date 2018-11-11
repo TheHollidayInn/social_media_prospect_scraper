@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "webScraperWorker": "node website-contact-scraper/worker.js",
-    "api": "node api/index.js"
+    "api": "node api/index.js",
+    "WebContactScraper": "tsc && node website-contact-scraper/website-contact-scraper.js"
   },
   "author": "",
   "license": "ISC",

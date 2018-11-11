@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const urlUtils_1 = require("./urlUtils");
 class InfoItemWithSource {
     constructor(urlSource, item, type) {
         this.urlSource = urlSource;
@@ -59,11 +60,11 @@ async function startScrapingFromURL(startURL) {
     const currentURLS = secondSetOfPageInfos
         .filter(info => info.foundURLS)
         .map(info => info.foundURLS);
-    const rootURL = extractRootDomain(startURL);
+    const rootURL = urlUtils_1.extractRootDomain(startURL);
     const mergedURLs = []
         .concat(...currentURLS)
         .filter(url => !firstPageInfo.foundURLS.includes(url))
-        .filter(url => extractRootDomain(url) === rootURL);
+        .filter(url => urlUtils_1.extractRootDomain(url) === rootURL);
     const uniqueMergedURLs = uniq(mergedURLs);
     // Scrape one more level deep
     console.log("––––––– started THIRD set of scraping");
@@ -125,10 +126,10 @@ async function scrapeURLForEmailorPhoneitems(startURL) {
         .concat(secondSetOfURLs)
         .concat(thirdSetOfURLs);
     // filter urls that do not match the startUrl's domain
-    const rootURL = extractRootDomain(startURL);
+    const rootURL = urlUtils_1.extractRootDomain(startURL);
     const finalURLs = mergedURLs
         .filter(x => x)
-        .filter(url => extractRootDomain(url) === rootURL);
+        .filter(url => urlUtils_1.extractRootDomain(url) === rootURL);
     console.log(`–––––––– Finished getting ${finalURLs.length} links`);
     console.timeEnd("getting links");
     console.time("scraping urls");
@@ -165,7 +166,7 @@ function emailAndPhoneScrapeInfosToItemsWithSources(emailAndPhoneScrapeInfos) {
         const item = info.item;
         return (strictEmailRegexCheck(item) &&
             !isStringProbablyAnImagePath(item) &&
-            !endExtensionIsOnlyNumbers(item));
+            !urlUtils_1.endExtensionIsOnlyNumbers(item));
     });
     return validItems;
 }
@@ -341,37 +342,4 @@ function isStringProbablyAnImagePath(string) {
         }
     });
     return result;
-}
-function endExtensionIsOnlyNumbers(string) {
-    const extension = string.substring(string.lastIndexOf(".") + 1);
-    return /^\d+$/.test(extension);
-}
-function extractHostname(url) {
-    var hostname;
-    //find & remove protocol (http, ftp, etc.) and get hostname
-    if (url.indexOf("//") > -1) {
-        hostname = url.split("/")[2];
-    }
-    else {
-        hostname = url.split("/")[0];
-    }
-    //find & remove port number
-    hostname = hostname.split(":")[0];
-    //find & remove "?"
-    hostname = hostname.split("?")[0];
-    return hostname;
-}
-function extractRootDomain(url) {
-    var domain = extractHostname(url), splitArr = domain.split("."), arrLen = splitArr.length;
-    //extracting the root domain here
-    //if there is a subdomain
-    if (arrLen > 2) {
-        domain = splitArr[arrLen - 2] + "." + splitArr[arrLen - 1];
-        //check to see if it's using a Country Code Top Level Domain (ccTLD) (i.e. ".me.uk")
-        if (splitArr[arrLen - 2].length == 2 && splitArr[arrLen - 1].length == 2) {
-            //this is using a ccTLD
-            domain = splitArr[arrLen - 3] + "." + domain;
-        }
-    }
-    return domain;
 }
