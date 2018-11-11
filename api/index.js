@@ -12,6 +12,11 @@ const port = 3000;
 IO.on('connection', (socket) => {
   console.log('a user connected' + socket);
 
+  socket.on('webscraped', (msg) => {
+    IO.emit('webscraped', msg);
+    // createWebsiteScrapRequest('http://test.com', IO);
+  });
+
   socket.on('requestscrape', (msg) => {
     console.log(msg)
     createWebsiteScrapRequest('http://test.com', IO);
@@ -22,7 +27,7 @@ app.use(express.static('public'));
 
 // @TODO: Make post
 app.get('/request', (req, res) => {
-  createWebsiteScrapRequest('http://test.com', IO);
+  createWebsiteScrapRequest('http://test.com');
   res.send('Hello World!');
 });
 
