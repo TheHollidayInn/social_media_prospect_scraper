@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+const puppeteer = require('puppeteer');
 const urlUtils_1 = require("./urlUtils");
 const utils_1 = require("./utils");
 const emailPhoneUtils_1 = require("./emailPhoneUtils");
@@ -107,12 +108,14 @@ async function fetchEmailAndPhoneScrapeInfoForAllUrls(urls) {
 // MARK: Puppeteer Retrieve html
 async function getHTMLForURLUsingPuppeteerBrowser(url, browser) {
     const page = await browser.newPage();
+    console.log(`Connecting to ${url}`);
     page.goto(url);
     await page.waitForNavigation({ waitUntil: "networkidle0" });
     const body = await page.evaluate(() => document.body.innerHTML);
     if (body === undefined) {
         throw new Error("No html returned from page");
     }
+    console.log(`Connected to ${url}`);
     const response = new models_1.WebsiteHTMLResponse(url, body);
     return response;
 }
@@ -211,9 +214,9 @@ async function scrapeURLForEmailorPhoneitems(startURL) {
 exports.scrapeURLForEmailorPhoneitems = scrapeURLForEmailorPhoneitems;
 async function startScrapingFromURL(startURL) {
     const start = Date.now();
-    const puppeteer = require("puppeteer");
     const browser = await puppeteer.launch();
     // Scrape start url
+    console.log("––––––– started First set of scraping");
     const firstPageInfo = await scrapeURLWithBrowser(startURL, browser);
     // Scrape second level deep
     console.log("––––––– started SECOND set of scraping");
@@ -245,9 +248,8 @@ async function startScrapingFromURL(startURL) {
     return items;
 }
 exports.startScrapingFromURL = startScrapingFromURL;
-const testURL = "https://www.roosterteeth.com/";
+// const testURL = "https://www.roosterteeth.com/";
 // const testURL = "https://www.contactusinc.com/";
 // const testURL = "https://www.bonjoro.com/";
-// @TODO: turn into export function
 // scrapeURLForEmailorPhoneitems(testURL);
-startScrapingFromURL(testURL);
+// startScrapingFromURL(testURL);

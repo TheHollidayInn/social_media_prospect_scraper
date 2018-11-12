@@ -7,7 +7,7 @@ socket.on('connect_error', (err) => {
 });
 
 const Constants = require('./constants');
-// const { startScrapingFromURL } = require('../website-contact-scraper');
+const { startScrapingFromURL } = require('../website-contact-scraper/website-contact-scraper');
 
 const queue = new Queue(
   Constants.WEBSITE_CONTACT_SCRAPER_QUEUE,
@@ -21,9 +21,9 @@ const queue = new Queue(
 );
 
 // Process jobs from as many servers or processes as you like
-queue.process((job, done) => {
-  // startScrapingFromURL(job.data.url);
-  socket.emit('webscraped', JSON.stringify(job.data));
-  console.log(`Processing job ${job.id}`, socket.connected);
+queue.process(async (job, done) => {
+  console.log(`Processing job ${job.id} ${job.data.url}`);
+  const results = await startScrapingFromURL(job.data.url).catch(e => console.log(e));
+  socket.emit('webscraped', JSON.stringify(results));
   return done(null, JSON.stringify(job.data));
 });

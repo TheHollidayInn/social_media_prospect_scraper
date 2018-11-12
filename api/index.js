@@ -10,16 +10,15 @@ const IO = io(httpServer);
 const port = 3000;
 
 IO.on('connection', (socket) => {
-  console.log('a user connected' + socket);
+  console.log(`a user connected${socket}`);
 
   socket.on('webscraped', (msg) => {
     IO.emit('webscraped', msg);
-    // createWebsiteScrapRequest('http://test.com', IO);
   });
 
   socket.on('requestscrape', (msg) => {
-    console.log(msg)
-    createWebsiteScrapRequest('http://test.com', IO);
+    console.log(msg);
+    createWebsiteScrapRequest(msg);
   });
 });
 
