@@ -1,9 +1,8 @@
 const puppeteer = require("puppeteer");
-const duckURL = "https://duckduckgo.com/?q=";
-const keyword = "dallas";
+const duckRootURL = "https://duckduckgo.com/?q=";
 
-async function scrapeSearchWithKeyword(keyword) {
-  const url = duckURL + keyword;
+export async function scrapeSearchWithKeyword(keyword) {
+  const url = duckRootURL + keyword;
   const browser = await puppeteer.launch();
   const page = await browser.newPage();
 
@@ -17,9 +16,9 @@ async function scrapeSearchWithKeyword(keyword) {
   await scrollPageToEnd(page);
   console.log("Done scrolling to end of page");
 
-  const pageCount = 4;
-  console.log(`Clicking more button ${pageCount} times`);
-  await expandPageResultsForPageCount(pageCount, page);
+  const buttonCount = 4;
+  console.log(`Clicking more button ${buttonCount} times`);
+  await expandPageResultsForButtonCount(buttonCount, page);
   console.log("Done clicking more buttons");
 
   const urlResults = await page.evaluate(() =>
@@ -31,14 +30,14 @@ async function scrapeSearchWithKeyword(keyword) {
   browser.close();
 }
 
-async function expandPageResultsForPageCount(pageCount, page) {
+async function expandPageResultsForButtonCount(buttonCount, page) {
   const moreButtonSelector = ".btn--full";
-  for (let i = 0; i < pageCount; i++) {
+  for (let i = 0; i < buttonCount; i++) {
     await page.click(moreButtonSelector);
     // @TODO: handle if there is no selector
     await page.waitForSelector(moreButtonSelector);
 
-    console.log(`Finished clicking ${i + 1} / ${pageCount} more buttons`);
+    console.log(`Finished clicking ${i + 1} / ${buttonCount} more buttons`);
   }
 }
 
@@ -47,5 +46,3 @@ async function scrollPageToEnd(page) {
     window.scrollBy(0, window.innerHeight);
   });
 }
-
-scrapeSearchWithKeyword(keyword);
