@@ -3,6 +3,6 @@
     "target": "es2018",
     "module": "commonjs"
   },
-  "include": ["/**/*"],
+  "include": ["/**/website-contact-scraper/*", "/**/name-to-email-matcher/*"],
   "exclude": ["node_modules", "**/*.spec.ts"]
 }
