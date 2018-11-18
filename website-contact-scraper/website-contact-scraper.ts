@@ -124,7 +124,9 @@ async function getHTMLForURLUsingPuppeteerPage(
   console.log(`Connecting to ${url}`);
 
   page.goto(url);
-  await page.waitForNavigation({ waitUntil: "networkidle0" });
+  await page
+    .waitForNavigation({ waitUntil: "networkidle0" })
+    .catch(x => console.log(`${url} exceeded network idle timeout`));
   const body = await page.evaluate(() => document.body.innerHTML);
   if (body === undefined) {
     throw new Error("No html returned from page");
@@ -164,6 +166,28 @@ function getAllLinksInHTML(html) {
   return websiteLinks;
 }
 
+async function clusterScrapeURLs(urls): Promise<PageScrapeInfo[]> {
+  const cluster = await Cluster.launch({
+    concurrency: Cluster.CONCURRENCY_CONTEXT,
+    maxConcurrency: 50
+  });
+
+  let results = [];
+  urls.map(url => {
+    cluster.queue(url, async ({ page, data: url }) => {
+      const result = await scrapeURLWithPage(url, page).catch(x =>
+        console.log(x)
+      );
+      if (result != undefined) {
+        results.push(result);
+      }
+    });
+  });
+  await cluster.idle();
+  await cluster.close();
+  return results;
+}
+
 export async function startScrapingFromURL(
   startURL
 ): Promise<ItemWithSources[]> {
@@ -179,7 +203,6 @@ export async function startScrapingFromURL(
   console.log("––––––– started SECOND set of scraping");
   const secondSetOfPageInfos = await clusterScrapeURLs(firstPageInfo.foundURLS);
 
-  // @TODO: throw for no found urls or null web info
   const currentURLS = secondSetOfPageInfos
     .filter(info => info.foundURLS)
     .map(info => info.foundURLS);
@@ -213,27 +236,7 @@ export async function startScrapingFromURL(
   return items;
 }
 
-async function clusterScrapeURLs(urls): Promise<PageScrapeInfo[]> {
-  const cluster = await Cluster.launch({
-    concurrency: Cluster.CONCURRENCY_CONTEXT,
-    maxConcurrency: 10
-  });
-
-  let results = [];
-  urls.map(url => {
-    cluster.queue(url, async ({ page, data: url }) => {
-      const result = await scrapeURLWithPage(url, page).catch(x =>
-        console.log(x)
-      );
-      results.push(result);
-    });
-  });
-  await cluster.idle();
-  await cluster.close();
-  return results;
-}
-
 // const testURL = "https://www.roosterteeth.com/";
-const testURL = "https://www.contactusinc.com/";
+// const testURL = "https://www.contactusinc.com/";
 // const testURL = "https://www.bonjoro.com/";
-startScrapingFromURL(testURL);
+// startScrapingFromURL(testURL);

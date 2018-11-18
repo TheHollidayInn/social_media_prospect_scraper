@@ -69,7 +69,9 @@ function seperateScrapeInfosIntoURLPhoneArray(emailAndPhoneScrapeInfos) {
 async function getHTMLForURLUsingPuppeteerPage(url, page) {
     console.log(`Connecting to ${url}`);
     page.goto(url);
-    await page.waitForNavigation({ waitUntil: "networkidle0" });
+    await page
+        .waitForNavigation({ waitUntil: "networkidle0" })
+        .catch(x => console.log(`${url} exceeded network idle timeout`));
     const body = await page.evaluate(() => document.body.innerHTML);
     if (body === undefined) {
         throw new Error("No html returned from page");
@@ -99,6 +101,24 @@ function getAllLinksInHTML(html) {
     const websiteLinks = deDupedLinks.filter(url => validator.isURL(url));
     return websiteLinks;
 }
+async function clusterScrapeURLs(urls) {
+    const cluster = await Cluster.launch({
+        concurrency: Cluster.CONCURRENCY_CONTEXT,
+        maxConcurrency: 50
+    });
+    let results = [];
+    urls.map(url => {
+        cluster.queue(url, async ({ page, data: url }) => {
+            const result = await scrapeURLWithPage(url, page).catch(x => console.log(x));
+            if (result != undefined) {
+                results.push(result);
+            }
+        });
+    });
+    await cluster.idle();
+    await cluster.close();
+    return results;
+}
 async function startScrapingFromURL(startURL) {
     const start = Date.now();
     const browser = await puppeteer.launch();
@@ -110,7 +130,6 @@ async function startScrapingFromURL(startURL) {
     // Scrape second level deep
     console.log("––––––– started SECOND set of scraping");
     const secondSetOfPageInfos = await clusterScrapeURLs(firstPageInfo.foundURLS);
-    // @TODO: throw for no found urls or null web info
     const currentURLS = secondSetOfPageInfos
         .filter(info => info.foundURLS)
         .map(info => info.foundURLS);
@@ -137,23 +156,7 @@ async function startScrapingFromURL(startURL) {
     return items;
 }
 exports.startScrapingFromURL = startScrapingFromURL;
-async function clusterScrapeURLs(urls) {
-    const cluster = await Cluster.launch({
-        concurrency: Cluster.CONCURRENCY_CONTEXT,
-        maxConcurrency: 10
-    });
-    let results = [];
-    urls.map(url => {
-        cluster.queue(url, async ({ page, data: url }) => {
-            const result = await scrapeURLWithPage(url, page).catch(x => console.log(x));
-            results.push(result);
-        });
-    });
-    await cluster.idle();
-    await cluster.close();
-    return results;
-}
 // const testURL = "https://www.roosterteeth.com/";
-const testURL = "https://www.contactusinc.com/";
+// const testURL = "https://www.contactusinc.com/";
 // const testURL = "https://www.bonjoro.com/";
-startScrapingFromURL(testURL);
+// startScrapingFromURL(testURL);
