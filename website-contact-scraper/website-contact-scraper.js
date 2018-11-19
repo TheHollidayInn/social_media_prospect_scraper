@@ -2,10 +2,21 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const puppeteer = require("puppeteer");
 const { Cluster } = require("puppeteer-cluster");
+const defaultPuppeteerArgs = [
+    "--disable-gpu",
+    "--disable-dev-shm-usage",
+    "--disable-setuid-sandbox",
+    "--no-first-run",
+    "--no-sandbox",
+    "--no-zygote",
+    "--single-process"
+];
+const maxConcurrentBrowsers = 20;
 const urlUtils_1 = require("./urlUtils");
 const utils_1 = require("./utils");
 const emailPhoneUtils_1 = require("./emailPhoneUtils");
 const models_1 = require("./models");
+const duck_scraper_1 = require("./duck-scraper");
 async function scrapeURLWithPage(url, page) {
     const response = await getHTMLForURLUsingPuppeteerPage(url, page);
     const html = response.html;
@@ -34,11 +45,14 @@ function emailAndPhoneScrapeInfosToItemsWithSources(emailAndPhoneScrapeInfos) {
     // Do some verification or more strict filtering on items here
     const validItems = uniqueItemsWithSources.filter(info => {
         const item = info.item;
-        return (emailPhoneUtils_1.strictEmailRegexCheck(item) &&
-            !utils_1.isStringProbablyAnImagePath(item) &&
-            !urlUtils_1.endExtensionIsOnlyNumbers(item));
+        return strictIsValidEmail(item);
     });
     return validItems;
+}
+function strictIsValidEmail(string) {
+    return (emailPhoneUtils_1.strictEmailRegexCheck(string) &&
+        !utils_1.isStringProbablyAnImagePath(string) &&
+        !urlUtils_1.endExtensionIsOnlyNumbers(string));
 }
 function getAllObjectsWithMatchingItem(objects, itemToFind) {
     return objects.filter(function (obj) {
@@ -71,7 +85,7 @@ async function getHTMLForURLUsingPuppeteerPage(url, page) {
     page.goto(url);
     await page
         .waitForNavigation({ waitUntil: "networkidle0" })
-        .catch(x => console.log(`${url} exceeded network idle timeout`));
+        .catch(x => console.log(url, " exceeded network idle timeout"));
     const body = await page.evaluate(() => document.body.innerHTML);
     if (body === undefined) {
         throw new Error("No html returned from page");
@@ -101,11 +115,7 @@ function getAllLinksInHTML(html) {
     const websiteLinks = deDupedLinks.filter(url => validator.isURL(url));
     return websiteLinks;
 }
-async function clusterScrapeURLs(urls) {
-    const cluster = await Cluster.launch({
-        concurrency: Cluster.CONCURRENCY_CONTEXT,
-        maxConcurrency: 50
-    });
+async function scrapeURLsWithCluster(urls, cluster) {
     let results = [];
     urls.map(url => {
         cluster.queue(url, async ({ page, data: url }) => {
@@ -116,33 +126,43 @@ async function clusterScrapeURLs(urls) {
         });
     });
     await cluster.idle();
-    await cluster.close();
     return results;
 }
-async function startScrapingFromURL(startURL) {
+async function startScrapingFromURL(startURL, cluster) {
+    let currentCluster = cluster;
+    if (currentCluster == undefined) {
+        currentCluster = await Cluster.launch({
+            concurrency: Cluster.CONCURRENCY_CONTEXT,
+            maxConcurrency: maxConcurrentBrowsers,
+            args: defaultPuppeteerArgs
+        });
+    }
     const start = Date.now();
     const browser = await puppeteer.launch();
     const startPage = await browser.newPage();
     // Scrape start url
-    console.log("––––––– started First set of scraping");
+    console.log(`––––––– started First set of scraping for original url: ${startURL}`);
     const firstPageInfo = await scrapeURLWithPage(startURL, startPage);
-    // await browser.close();
     // Scrape second level deep
-    console.log("––––––– started SECOND set of scraping");
-    const secondSetOfPageInfos = await clusterScrapeURLs(firstPageInfo.foundURLS);
+    console.log(`––––––– started SECOND set of scraping for original url: ${startURL}`);
+    const rootURL = urlUtils_1.extractRootDomain(startURL);
+    const firstSetOfURLs = firstPageInfo.foundURLS
+        .filter(url => urlUtils_1.extractRootDomain(url) === rootURL)
+        .filter(url => !utils_1.isStringProbablyAnImagePath(url));
+    const secondSetOfPageInfos = await scrapeURLsWithCluster(firstSetOfURLs, cluster);
     const currentURLS = secondSetOfPageInfos
         .filter(info => info.foundURLS)
         .map(info => info.foundURLS);
-    const rootURL = urlUtils_1.extractRootDomain(startURL);
     const mergedURLs = []
         .concat(...currentURLS)
         .filter(url => !firstPageInfo.foundURLS.includes(url))
-        .filter(url => urlUtils_1.extractRootDomain(url) === rootURL);
+        .filter(url => urlUtils_1.extractRootDomain(url) === rootURL)
+        .filter(url => !utils_1.isStringProbablyAnImagePath(url));
     const uniqueMergedURLs = utils_1.uniq(mergedURLs);
     // Scrape one more level deep
-    console.log("––––––– started THIRD set of scraping");
-    const thirdSetOfPageInfos = await clusterScrapeURLs(uniqueMergedURLs);
-    browser.close();
+    console.log(`––––––– started THIRD set of scraping for original url: ${startURL}`);
+    const thirdSetOfPageInfos = await scrapeURLsWithCluster(uniqueMergedURLs, cluster);
+    await browser.close();
     const allPageInfos = [firstPageInfo]
         .concat(...secondSetOfPageInfos)
         .concat(...thirdSetOfPageInfos)
@@ -152,10 +172,28 @@ async function startScrapingFromURL(startURL) {
     const items = emailAndPhoneScrapeInfosToItemsWithSources(utils_1.uniq(allPageInfos));
     const endTime = (Date.now() - start) / 1000;
     console.log(`––––––– total time elapsed for all url scraping and filtering: ${endTime} secs`);
-    console.log(`–––––––– returning/found ${items.length} Email or Phone items`);
+    console.log(`–––––––– returning/found ${items.length} Email or Phone items for original url: ${startURL}`);
+    await cluster.close();
     return items;
 }
 exports.startScrapingFromURL = startScrapingFromURL;
+async function startScrapingWithKeyword(keyword) {
+    const urls = await duck_scraper_1.scrapeSearchWithKeyword("dallas small business");
+    const cluster = await Cluster.launch({
+        concurrency: Cluster.CONCURRENCY_CONTEXT,
+        maxConcurrency: maxConcurrentBrowsers,
+        args: defaultPuppeteerArgs
+    });
+    const urlsWithRootDomains = urls.map(url => {
+        return { url: url, rootDomain: urlUtils_1.extractHostname(url) };
+    });
+    // Get unique by root domain name for urls
+    const uniqURLs = utils_1.removeDuplicates(urlsWithRootDomains, "rootDomain").map(item => item.url);
+    const allScrapers = uniqURLs.map(url => startScrapingFromURL(url, cluster));
+    return Promise.all(allScrapers).then(response => {
+        return response;
+    });
+}
 // const testURL = "https://www.roosterteeth.com/";
 // const testURL = "https://www.contactusinc.com/";
 // const testURL = "https://www.bonjoro.com/";

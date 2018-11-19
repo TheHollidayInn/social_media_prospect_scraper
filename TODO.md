@@ -9,3 +9,4 @@
 - [ ] Add dotenv
 - [ ] retry failed urls
 - [ ] Look up Filename best practices/conventions
+- [ ] save results as we go
