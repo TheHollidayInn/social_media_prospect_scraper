@@ -28,6 +28,8 @@ export async function scrapeSearchWithKeyword(keyword) {
   );
   console.log(`Found ${urlResults.length} urls`);
   browser.close();
+
+  return urlResults;
 }
 
 async function expandPageResultsForButtonCount(buttonCount, page) {

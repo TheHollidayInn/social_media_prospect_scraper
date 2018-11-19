@@ -20,6 +20,7 @@ async function scrapeSearchWithKeyword(keyword) {
     const urlResults = await page.evaluate(() => Array.from(document.querySelectorAll(".result__extras__url")).map(x => x.textContent));
     console.log(`Found ${urlResults.length} urls`);
     browser.close();
+    return urlResults;
 }
 exports.scrapeSearchWithKeyword = scrapeSearchWithKeyword;
 async function expandPageResultsForButtonCount(buttonCount, page) {

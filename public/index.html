@@ -28,7 +28,8 @@
 
       var socket = io();
       $('form').submit(function(){
-        socket.emit('requestscrape', $('#m').val());
+        // socket.emit('requestscrape', $('#m').val());
+        socket.emit('RequestDuckScrape', $('#m').val());
         $('#m').val('');
         return false;
       });

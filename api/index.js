@@ -3,6 +3,7 @@ const http = require('http');
 const io = require('socket.io');
 
 const { createWebsiteScrapRequest } = require('../website-contact-scraper/producer');
+const { createDuckScrapRequest } = require('../website-contact-scraper/DuckScraperWorkerProducer');
 
 const app = express();
 const httpServer = http.Server(app);
@@ -19,6 +20,11 @@ IO.on('connection', (socket) => {
   socket.on('requestscrape', (msg) => {
     console.log(msg);
     createWebsiteScrapRequest(msg);
+  });
+
+  socket.on('RequestDuckScrape', (msg) => {
+    console.log(msg);
+    createDuckScrapRequest(msg);
   });
 });
 
