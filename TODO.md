@@ -8,3 +8,4 @@
 - [ ] DataDog/Or Similar
 - [ ] Add dotenv
 - [ ] retry failed urls
+- [ ] save results as we go
