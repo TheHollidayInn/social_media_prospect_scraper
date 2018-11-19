@@ -17,9 +17,14 @@ async function scrapeSearchWithKeyword(keyword) {
     console.log(`Clicking more button ${buttonCount} times`);
     await expandPageResultsForButtonCount(buttonCount, page);
     console.log("Done clicking more buttons");
-    const urlResults = await page.evaluate(() => Array.from(document.querySelectorAll(".result__extras__url")).map(x => x.textContent));
+    const urlResults = await page.evaluate(() => {
+        // const anchors = document.querySelectorAll(".result__extras__url");
+        const anchors = document.querySelectorAll(".result__url");
+        return [].map.call(anchors, a => a.href);
+    });
     console.log(`Found ${urlResults.length} urls`);
     browser.close();
+    return urlResults.filter(x => x);
 }
 exports.scrapeSearchWithKeyword = scrapeSearchWithKeyword;
 async function expandPageResultsForButtonCount(buttonCount, page) {
@@ -36,3 +41,4 @@ async function scrollPageToEnd(page) {
         window.scrollBy(0, window.innerHeight);
     });
 }
+// scrapeSearchWithKeyword("dallas small business");
